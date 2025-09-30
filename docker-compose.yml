@@ -1,0 +1,187 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for Airflow metadata
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  # Redis for Airflow Celery
+  redis:
+    image: redis:7-alpine
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    restart: always
+
+  # Airflow webserver
+  airflow-webserver:
+    build:
+      context: ./modules/orchestration
+      dockerfile: Dockerfile
+    command: webserver
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    volumes:
+      - ./modules/orchestration/dags:/opt/airflow/dags
+      - ./modules/orchestration/logs:/opt/airflow/logs
+      - ./modules/orchestration/plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
+  # Airflow scheduler
+  airflow-scheduler:
+    build:
+      context: ./modules/orchestration
+      dockerfile: Dockerfile
+    command: scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    volumes:
+      - ./modules/orchestration/dags:/opt/airflow/dags
+      - ./modules/orchestration/logs:/opt/airflow/logs
+      - ./modules/orchestration/plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
+  # Airflow worker
+  airflow-worker:
+    build:
+      context: ./modules/orchestration
+      dockerfile: Dockerfile
+    command: celery worker
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ''
+    volumes:
+      - ./modules/orchestration/dags:/opt/airflow/dags
+      - ./modules/orchestration/logs:/opt/airflow/logs
+      - ./modules/orchestration/plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
+  # Data ingestion service
+  data-ingestion:
+    build:
+      context: ./modules/data-ingestion
+      dockerfile: Dockerfile
+    environment:
+      - GEE_SERVICE_ACCOUNT=${GEE_SERVICE_ACCOUNT}
+      - GEE_PRIVATE_KEY_FILE=/app/credentials/gee_key.json
+    volumes:
+      - ./data:/app/data
+      - ./credentials:/app/credentials
+    restart: always
+
+  # Preprocessing service
+  preprocessing:
+    build:
+      context: ./modules/preprocessing
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/app/data
+    restart: always
+
+  # Feature engineering service
+  feature-engineering:
+    build:
+      context: ./modules/feature-engineering
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/app/data
+    restart: always
+
+  # Prediction service (FastAPI)
+  prediction-service:
+    build:
+      context: ./modules/prediction-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - MODEL_PATH=/app/models
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    restart: always
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: ./modules/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_MAPBOX_TOKEN=${MAPBOX_TOKEN}
+    depends_on:
+      - prediction-service
+    restart: always
+
+  # Reporting service
+  reporting:
+    build:
+      context: ./modules/reporting
+      dockerfile: Dockerfile
+    volumes:
+      - ./reports:/app/reports
+      - ./data:/app/data
+    restart: always
+
+volumes:
+  postgres_data:
