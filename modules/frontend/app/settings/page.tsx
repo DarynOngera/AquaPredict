@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { api } from '@/lib/api'
 import { 
   Settings as SettingsIcon, 
   User,
@@ -15,12 +16,88 @@ import {
   Zap,
   Shield,
   Save,
-  RefreshCw
+  RefreshCw,
+  Download
 } from 'lucide-react'
 
 export default function SettingsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeSection, setActiveSection] = useState('general')
+  const [settings, setSettings] = useState<any>(null)
+  const [dataSources, setDataSources] = useState<any>(null)
+  const [models, setModels] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    loadSettings()
+    loadDataSources()
+    loadModels()
+  }, [])
+
+  const loadSettings = async () => {
+    try {
+      const data = await api.getSettings()
+      setSettings(data)
+    } catch (error) {
+      console.error('Failed to load settings:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadDataSources = async () => {
+    try {
+      const data = await api.getDataSources()
+      setDataSources(data)
+    } catch (error) {
+      console.error('Failed to load data sources:', error)
+    }
+  }
+
+  const loadModels = async () => {
+    try {
+      const data = await api.listModels()
+      setModels(data)
+    } catch (error) {
+      console.error('Failed to load models:', error)
+    }
+  }
+
+  const handleSaveSettings = async () => {
+    setSaving(true)
+    try {
+      await api.updateSettings(settings)
+      alert('Settings saved successfully!')
+    } catch (error) {
+      console.error('Failed to save settings:', error)
+      alert('Failed to save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReloadModels = async () => {
+    try {
+      await api.reloadModels()
+      await loadModels()
+      alert('Models reloaded successfully!')
+    } catch (error) {
+      console.error('Failed to reload models:', error)
+      alert('Failed to reload models')
+    }
+  }
+
+  if (loading || !settings) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading settings...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -309,9 +386,9 @@ export default function SettingsPage() {
                           </Badge>
                         </div>
 
-                        <Button variant="outline" className="w-full">
+                        <Button variant="outline" className="w-full" onClick={handleReloadModels}>
                           <RefreshCw className="mr-2 h-4 w-4" />
-                          Check for Updates
+                          Reload Models
                         </Button>
                       </CardContent>
                     </Card>
@@ -418,10 +495,10 @@ export default function SettingsPage() {
 
                 {/* Save Button */}
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline">Cancel</Button>
-                  <Button>
+                  <Button variant="outline" onClick={() => loadSettings()}>Cancel</Button>
+                  <Button onClick={handleSaveSettings} disabled={saving}>
                     <Save className="mr-2 h-4 w-4" />
-                    Save Changes
+                    {saving ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </div>
