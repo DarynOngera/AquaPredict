@@ -30,20 +30,35 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    loadSettings()
-    loadDataSources()
-    loadModels()
+    loadAllData()
   }, [])
 
-  const loadSettings = async () => {
+  const loadAllData = async () => {
+    // Load all data in parallel with timeout
+    const timeout = (ms: number) => new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout')), ms)
+    )
+
     try {
-      const data = await api.getSettings()
+      // Load settings first (required)
+      const settingsPromise = api.getSettings()
+      const data = await Promise.race([settingsPromise, timeout(5000)])
       setSettings(data)
     } catch (error) {
       console.error('Failed to load settings:', error)
+      // Set default settings if load fails
+      setSettings({
+        map_center: { lat: 0.0236, lon: 37.9062, zoom: 6 },
+        default_depth_range: '0-100m',
+        confidence_threshold: 0.7
+      })
     } finally {
       setLoading(false)
     }
+
+    // Load data sources and models in background (optional)
+    loadDataSources()
+    loadModels()
   }
 
   const loadDataSources = async () => {
@@ -52,6 +67,7 @@ export default function SettingsPage() {
       setDataSources(data)
     } catch (error) {
       console.error('Failed to load data sources:', error)
+      setDataSources({ gee: { available: false, datasets: [] } })
     }
   }
 
@@ -61,6 +77,7 @@ export default function SettingsPage() {
       setModels(data)
     } catch (error) {
       console.error('Failed to load models:', error)
+      setModels({ aquifer: { loaded: false }, recharge: { loaded: false } })
     }
   }
 
@@ -495,7 +512,7 @@ export default function SettingsPage() {
 
                 {/* Save Button */}
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => loadSettings()}>Cancel</Button>
+                  <Button variant="outline" onClick={() => loadAllData()}>Cancel</Button>
                   <Button onClick={handleSaveSettings} disabled={saving}>
                     <Save className="mr-2 h-4 w-4" />
                     {saving ? 'Saving...' : 'Save Changes'}

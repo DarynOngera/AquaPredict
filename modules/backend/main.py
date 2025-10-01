@@ -575,16 +575,23 @@ async def get_feature_info():
 @app.get("/api/v1/data/preview/{dataset_id}")
 async def get_dataset_preview(
     dataset_id: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    region: Optional[str] = Query("kenya", description="Region: kenya, nairobi, mombasa, custom"),
+    west: Optional[float] = Query(None, description="West longitude for custom region"),
+    south: Optional[float] = Query(None, description="South latitude for custom region"),
+    east: Optional[float] = Query(None, description="East longitude for custom region"),
+    north: Optional[float] = Query(None, description="North latitude for custom region")
 ):
     """
-    Get GEE tile URL for dataset preview.
+    Get detailed dataset preview with regional statistics over a date range.
     
     Args:
         dataset_id: Dataset identifier (chirps, era5, srtm, etc.)
-        start_date: Start date for temporal datasets (YYYY-MM-DD)
-        end_date: End date for temporal datasets (YYYY-MM-DD)
+        start_date: Start date for temporal datasets
+        end_date: End date for temporal datasets
+        region: Predefined region or 'custom'
+        west, south, east, north: Bounding box for custom region
     """
     try:
         if not gee_service.is_available():
@@ -593,13 +600,38 @@ async def get_dataset_preview(
                 detail="Google Earth Engine not available. Please configure GEE credentials."
             )
         
-        tile_url = await gee_service.get_tile_url(dataset_id, start_date, end_date)
+        # Define region bounds
+        regions = {
+            'kenya': [33.9, -4.7, 41.9, 5.5],
+            'nairobi': [36.6, -1.5, 37.1, -1.1],
+            'mombasa': [39.5, -4.2, 39.8, -3.9],
+            'mt_kenya': [37.0, -0.5, 37.5, 0.0],
+            'turkana': [35.0, 2.5, 36.5, 4.5]
+        }
+        
+        if region == 'custom' and all([west, south, east, north]):
+            bbox = [west, south, east, north]
+        else:
+            bbox = regions.get(region, regions['kenya'])
+        
+        # Get regional statistics over date range
+        stats = await gee_service.get_regional_stats(dataset_id, bbox, start_date, end_date)
+        
+        # Try to get tile URL for visualization (optional)
+        tile_url = None
+        try:
+            tile_url = await gee_service.get_tile_url(dataset_id, start_date, end_date)
+        except Exception as tile_error:
+            logger.warning(f"Could not generate tile URL: {tile_error}")
         
         return {
             "dataset_id": dataset_id,
             "tile_url": tile_url,
-            "start_date": start_date,
-            "end_date": end_date,
+            "region": region,
+            "bbox": bbox,
+            "statistics": stats,
+            "start_date": stats.get('date_range', [start_date, end_date])[0] if stats.get('date_range') else start_date,
+            "end_date": stats.get('date_range', [start_date, end_date])[1] if stats.get('date_range') else end_date,
             "timestamp": datetime.utcnow().isoformat()
         }
     

@@ -6,15 +6,21 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
 import { 
   Database, 
   Layers, 
   MapPin,
-  Calendar,
   Info,
   Eye,
-  RefreshCw
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  BarChart3,
+  Loader2
 } from 'lucide-react'
 
 interface Dataset {
@@ -44,6 +50,10 @@ export default function DatasetsPage() {
   const [selectedDataset, setSelectedDataset] = useState<Dataset | null>(null)
   const [loading, setLoading] = useState(true)
   const [geeAvailable, setGeeAvailable] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewData, setPreviewData] = useState<any>(null)
+  const [region, setRegion] = useState('kenya')
+  const [dateRange, setDateRange] = useState({ start: '', end: '' })
 
   useEffect(() => {
     loadDatasets()
@@ -59,6 +69,30 @@ export default function DatasetsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadPreview = async (dataset: Dataset) => {
+    setSelectedDataset(dataset)
+    setPreviewLoading(true)
+    setPreviewData(null)
+    try {
+      const data = await api.getDatasetPreview(
+        dataset.id,
+        region,
+        dateRange.start || undefined,
+        dateRange.end || undefined
+      )
+      setPreviewData(data)
+    } catch (error) {
+      console.error('Failed to load preview:', error)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const formatValue = (value: number | undefined, decimals: number = 2) => {
+    if (value === null || value === undefined) return 'N/A'
+    return typeof value === 'number' ? value.toFixed(decimals) : value
   }
 
   const ColorPalette = ({ colors }: { colors: string[] }) => (
@@ -177,85 +211,201 @@ export default function DatasetsPage() {
                       disabled={!geeAvailable}
                       onClick={(e) => {
                         e.stopPropagation()
-                        setSelectedDataset(dataset)
+                        loadPreview(dataset)
                       }}
                     >
                       <Eye className="mr-2 h-4 w-4" />
-                      Preview on Map
+                      Load Data Preview
                     </Button>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
-            {/* Selected Dataset Detail */}
+            {/* Enhanced Dataset Preview */}
             {selectedDataset && (
               <Card className="border-2 border-primary">
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{selectedDataset.name}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setSelectedDataset(null)}
-                    >
-                      Close
-                    </Button>
-                  </CardTitle>
-                  <CardDescription>
-                    Full dataset information and preview
-                  </CardDescription>
-                </CardHeader>
-                
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <Info className="h-4 w-4" />
-                        Dataset Details
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Full Collection:</span>
-                          <p className="font-mono text-xs mt-1 p-2 bg-muted rounded">
-                            {selectedDataset.collection}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Description:</span>
-                          <p className="mt-1">{selectedDataset.description}</p>
-                        </div>
-                      </div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Activity className="h-5 w-5" />
+                        {selectedDataset.name} - Live Data Preview
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        Real-time statistics from Google Earth Engine
+                      </CardDescription>
                     </div>
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      setSelectedDataset(null)
+                      setPreviewData(null)
+                    }}>
+                      <RefreshCw className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </CardHeader>
 
+                <CardContent className="space-y-6">
+                  {/* Region and Date Range Selector */}
+                  <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
                     <div>
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        Default View
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Latitude:</span>
-                          <span>{selectedDataset.default_center.lat}°</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Longitude:</span>
-                          <span>{selectedDataset.default_center.lon}°</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Zoom Level:</span>
-                          <span>{selectedDataset.default_center.zoom}</span>
-                        </div>
-                      </div>
+                      <Label htmlFor="region">Region</Label>
+                      <select
+                        id="region"
+                        value={region}
+                        onChange={(e) => setRegion(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="kenya">All Kenya</option>
+                        <option value="nairobi">Nairobi</option>
+                        <option value="mombasa">Mombasa</option>
+                        <option value="mt_kenya">Mt. Kenya</option>
+                        <option value="turkana">Turkana</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="start">Start Date</Label>
+                      <Input
+                        id="start"
+                        type="date"
+                        value={dateRange.start}
+                        onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="end">End Date</Label>
+                      <Input
+                        id="end"
+                        type="date"
+                        value={dateRange.end}
+                        onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                      />
                     </div>
                   </div>
+                  <div className="flex justify-center">
+                    <Button onClick={() => loadPreview(selectedDataset)} disabled={previewLoading} size="lg">
+                      {previewLoading ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading Regional Data...</>
+                      ) : (
+                        <><MapPin className="mr-2 h-4 w-4" />Load Preview</>
+                      )}
+                    </Button>
+                  </div>
 
-                  {geeAvailable && (
-                    <div className="pt-4 border-t">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        🚧 Map preview will be available in the next update. 
-                        The backend is ready to serve GEE tiles via <code className="bg-muted px-1 py-0.5 rounded">/api/v1/data/preview/{selectedDataset.id}</code>
-                      </p>
+                  {/* Statistics Cards */}
+                  {previewData?.statistics && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {previewData.statistics.min !== undefined && (
+                          <Card>
+                            <CardContent className="pt-6">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <TrendingDown className="h-4 w-4" />
+                                Minimum
+                              </div>
+                              <div className="text-2xl font-bold mt-2">{formatValue(previewData.statistics.min)}</div>
+                              <div className="text-xs text-muted-foreground">{previewData.statistics.unit}</div>
+                            </CardContent>
+                          </Card>
+                        )}
+                        {previewData.statistics.max !== undefined && (
+                          <Card>
+                            <CardContent className="pt-6">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <TrendingUp className="h-4 w-4" />
+                                Maximum
+                              </div>
+                              <div className="text-2xl font-bold mt-2">{formatValue(previewData.statistics.max)}</div>
+                              <div className="text-xs text-muted-foreground">{previewData.statistics.unit}</div>
+                            </CardContent>
+                          </Card>
+                        )}
+                        {previewData.statistics.mean !== undefined && (
+                          <Card>
+                            <CardContent className="pt-6">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Activity className="h-4 w-4" />
+                                Mean
+                              </div>
+                              <div className="text-2xl font-bold mt-2">{formatValue(previewData.statistics.mean)}</div>
+                              <div className="text-xs text-muted-foreground">{previewData.statistics.unit}</div>
+                            </CardContent>
+                          </Card>
+                        )}
+                        {previewData.statistics.std !== undefined && (
+                          <Card>
+                            <CardContent className="pt-6">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <BarChart3 className="h-4 w-4" />
+                                Std Dev
+                              </div>
+                              <div className="text-2xl font-bold mt-2">{formatValue(previewData.statistics.std)}</div>
+                              <div className="text-xs text-muted-foreground">{previewData.statistics.unit}</div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+
+                      {/* Dataset-specific details */}
+                      {selectedDataset.id === 'srtm' && previewData.statistics.elevation !== undefined && (
+                        <Card>
+                          <CardHeader><CardTitle className="text-base">Elevation Details</CardTitle></CardHeader>
+                          <CardContent className="grid grid-cols-2 gap-4 text-sm">
+                            <div><p className="text-muted-foreground">Point Elevation</p><p className="text-lg font-semibold">{formatValue(previewData.statistics.elevation, 0)}m</p></div>
+                            <div><p className="text-muted-foreground">Slope</p><p className="text-lg font-semibold">{formatValue(previewData.statistics.slope, 1)}°</p></div>
+                            <div><p className="text-muted-foreground">Regional Min</p><p className="text-lg font-semibold">{formatValue(previewData.statistics.regional_min, 0)}m</p></div>
+                            <div><p className="text-muted-foreground">Regional Max</p><p className="text-lg font-semibold">{formatValue(previewData.statistics.regional_max, 0)}m</p></div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {selectedDataset.id === 'worldcover' && previewData.statistics.class_name && (
+                        <Card>
+                          <CardHeader><CardTitle className="text-base">Land Cover</CardTitle></CardHeader>
+                          <CardContent>
+                            <div className="flex items-center justify-between">
+                              <div><p className="text-sm text-muted-foreground">Classification</p><p className="text-2xl font-bold">{previewData.statistics.class_name}</p></div>
+                              <Badge variant="outline" className="text-lg px-4 py-2">{previewData.statistics.class_value}</Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {selectedDataset.id === 'sentinel2' && previewData.statistics.interpretation && (
+                        <Card>
+                          <CardHeader><CardTitle className="text-base">NDVI Analysis</CardTitle></CardHeader>
+                          <CardContent>
+                            <div className="flex items-center justify-between">
+                              <div><p className="text-sm text-muted-foreground">Vegetation</p><p className="text-xl font-bold">{previewData.statistics.interpretation}</p></div>
+                              <div className="text-right"><p className="text-sm text-muted-foreground">Value</p><p className="text-2xl font-bold">{formatValue(previewData.statistics.mean, 3)}</p></div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Time Series */}
+                      {previewData.statistics.time_series?.values?.length > 0 && (
+                        <Card>
+                          <CardHeader><CardTitle className="text-base">Time Series (Last 30 Days)</CardTitle></CardHeader>
+                          <CardContent>
+                            <div className="h-48 flex items-end justify-between gap-1">
+                              {previewData.statistics.time_series.values.slice(-30).map((value: number, idx: number) => {
+                                const maxValue = Math.max(...previewData.statistics.time_series.values)
+                                const height = (value / maxValue) * 100
+                                return <div key={idx} className="flex-1 bg-primary rounded-t hover:opacity-80" style={{ height: `${height}%`, minHeight: '2px' }} title={`${value.toFixed(1)} ${previewData.statistics.unit}`} />
+                              })}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  )}
+
+                  {!previewData && !previewLoading && (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Select a region and date range, then click "Load Preview"</p>
+                      <p className="text-sm mt-2">Real-time regional statistics from Google Earth Engine</p>
                     </div>
                   )}
                 </CardContent>

@@ -122,10 +122,23 @@ export const api = {
   getFeatureInfo: () => fetchAPI<any>('/api/v1/data/features'),
 
   // Dataset preview
-  getDatasetPreview: (datasetId: string, startDate?: string, endDate?: string) => {
+  getDatasetPreview: (
+    datasetId: string, 
+    region?: string,
+    startDate?: string, 
+    endDate?: string,
+    bbox?: { west: number; south: number; east: number; north: number }
+  ) => {
     const params = new URLSearchParams()
+    if (region) params.append('region', region)
     if (startDate) params.append('start_date', startDate)
     if (endDate) params.append('end_date', endDate)
+    if (bbox) {
+      params.append('west', bbox.west.toString())
+      params.append('south', bbox.south.toString())
+      params.append('east', bbox.east.toString())
+      params.append('north', bbox.north.toString())
+    }
     const query = params.toString() ? `?${params.toString()}` : ''
     return fetchAPI<any>(`/api/v1/data/preview/${datasetId}${query}`)
   },
