@@ -1,0 +1,50 @@
+# OCI Authentication
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+user_ocid        = "ocid1.user.oc1..aaaaaaaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "us-ashburn-1"
+compartment_ocid = "ocid1.compartment.oc1..aaaaaaaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Availability Domain (get from: oci iam availability-domain list)
+availability_domain = "xxxx:US-ASHBURN-AD-1"
+
+# Network Configuration
+vcn_cidr = "10.0.0.0/16"
+
+# Database Configuration
+db_name           = "aquapredict"
+db_admin_password = "YourSecureP@ssw0rd123!"  # Must meet complexity requirements
+db_wallet_password = "YourWalletP@ssw0rd123!"
+db_app_user       = "aquapredict_app"
+db_app_password   = "YourAppP@ssw0rd123!"
+adb_cpu_core_count = 2
+adb_storage_tb    = 1
+adb_is_free_tier  = false  # Set to true for Always Free tier
+adb_enable_auto_scaling = true
+
+# OKE Configuration
+oke_cluster_name   = "aquapredict-cluster"
+kubernetes_version = "v1.28.2"
+oke_node_pool_size = 3
+oke_node_shape     = "VM.Standard.E4.Flex"
+
+# Compute Instance Configuration
+compute_instance_shape     = "VM.Standard.E4.Flex"
+compute_instance_ocpus     = 2
+compute_instance_memory_gb = 16
+compute_assign_public_ip   = true
+compute_create_load_balancer = true
+
+# SSH Key (paste your public key here)
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... your-email@example.com"
+
+# Google Earth Engine Service Account
+# Paste the entire JSON content as a single line with escaped quotes
+gee_service_account_json = "{\"type\":\"service_account\",\"project_id\":\"your-project\",...}"
+
+# Data Science Configuration
+ds_deploy_models = false  # Set to true to deploy models to endpoints
+
+# Environment
+environment = "production"

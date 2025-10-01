@@ -1,0 +1,105 @@
+#cloud-config
+# Cloud-init script for AquaPredict Data Processor Instance
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - python3.11
+  - python3.11-pip
+  - git
+  - docker
+  - docker-compose
+  - gdal
+  - gdal-python3
+
+write_files:
+  - path: /etc/systemd/system/aquapredict-processor.service
+    content: |
+      [Unit]
+      Description=AquaPredict Data Processor
+      After=network.target docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=simple
+      User=opc
+      WorkingDirectory=/opt/aquapredict-processor
+      Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+      ExecStart=/usr/local/bin/docker-compose up
+      ExecStop=/usr/local/bin/docker-compose down
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /opt/aquapredict-processor/.env
+    content: |
+      DB_CONNECTION_STRING=${db_connection_string}
+      OBJECT_STORAGE_NAMESPACE=${object_storage_namespace}
+      GEE_SERVICE_ACCOUNT=${gee_service_account}
+      ENVIRONMENT=production
+      LOG_LEVEL=INFO
+      PROCESSING_MODE=batch
+    permissions: '0600'
+    owner: opc:opc
+
+  - path: /opt/aquapredict-processor/docker-compose.yml
+    content: |
+      version: '3.8'
+      services:
+        processor:
+          image: ${object_storage_namespace}/aquapredict/data-processor:latest
+          container_name: aquapredict-processor
+          restart: always
+          env_file:
+            - .env
+          volumes:
+            - /mnt/data:/app/data
+            - /var/log/aquapredict:/app/logs
+          healthcheck:
+            test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+            interval: 60s
+            timeout: 10s
+            retries: 3
+
+        scheduler:
+          image: ${object_storage_namespace}/aquapredict/scheduler:latest
+          container_name: aquapredict-scheduler
+          restart: always
+          env_file:
+            - .env
+          volumes:
+            - /mnt/data:/app/data
+            - /var/log/aquapredict:/app/logs
+          depends_on:
+            - processor
+
+runcmd:
+  # Setup Docker
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker opc
+
+  # Create directories
+  - mkdir -p /opt/aquapredict-processor
+  - mkdir -p /mnt/data
+  - mkdir -p /var/log/aquapredict
+  - chown -R opc:opc /opt/aquapredict-processor
+  - chown -R opc:opc /mnt/data
+  - chown -R opc:opc /var/log/aquapredict
+
+  # Install OCI CLI
+  - bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --accept-all-defaults
+
+  # Pull Docker images from OCIR
+  - docker login ${object_storage_namespace}.ocir.io
+  - docker pull ${object_storage_namespace}.ocir.io/aquapredict/data-processor:latest
+  - docker pull ${object_storage_namespace}.ocir.io/aquapredict/scheduler:latest
+
+  # Start AquaPredict Processor service
+  - systemctl enable aquapredict-processor
+  - systemctl start aquapredict-processor
+
+final_message: "AquaPredict Data Processor instance is ready!"

@@ -44,7 +44,25 @@ variable "db_name" {
 }
 
 variable "db_admin_password" {
-  description = "Database Admin Password"
+  description = "Database Admin Password (12-30 chars with uppercase, lowercase, number, special char)"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_wallet_password" {
+  description = "Database Wallet Password"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_app_user" {
+  description = "Application Database User"
+  type        = string
+  default     = "aquapredict_app"
+}
+
+variable "db_app_password" {
+  description = "Application User Password"
   type        = string
   sensitive   = true
 }
@@ -59,6 +77,24 @@ variable "adb_storage_tb" {
   description = "ADB Storage in TB"
   type        = number
   default     = 1
+}
+
+variable "adb_is_free_tier" {
+  description = "Use Always Free tier"
+  type        = bool
+  default     = false
+}
+
+variable "adb_enable_auto_scaling" {
+  description = "Enable auto-scaling for ADB"
+  type        = bool
+  default     = true
+}
+
+variable "adb_create_database" {
+  description = "Create Autonomous Database (requires feature to be enabled)"
+  type        = bool
+  default     = false
 }
 
 # OKE
@@ -86,8 +122,64 @@ variable "oke_node_shape" {
   default     = "VM.Standard.E4.Flex"
 }
 
-# Object Storage
-variable "object_storage_namespace" {
-  description = "Object Storage Namespace"
+# Compute Instances
+variable "availability_domain" {
+  description = "Availability Domain for compute instances"
   type        = string
+}
+
+variable "compute_instance_shape" {
+  description = "Compute instance shape"
+  type        = string
+  default     = "VM.Standard.E4.Flex"
+}
+
+variable "compute_instance_ocpus" {
+  description = "Number of OCPUs per compute instance"
+  type        = number
+  default     = 2
+}
+
+variable "compute_instance_memory_gb" {
+  description = "Memory in GB per compute instance"
+  type        = number
+  default     = 16
+}
+
+variable "ssh_public_key" {
+  description = "SSH public key for instance access"
+  type        = string
+}
+
+variable "compute_assign_public_ip" {
+  description = "Assign public IP to backend API instance"
+  type        = bool
+  default     = true
+}
+
+variable "compute_create_load_balancer" {
+  description = "Create load balancer for API"
+  type        = bool
+  default     = true
+}
+
+# Google Earth Engine
+variable "gee_service_account_json" {
+  description = "Google Earth Engine service account JSON"
+  type        = string
+  sensitive   = true
+}
+
+# Data Science
+variable "ds_deploy_models" {
+  description = "Deploy models to OCI Data Science endpoints"
+  type        = bool
+  default     = false
+}
+
+# Environment
+variable "environment" {
+  description = "Environment name (production, staging, development)"
+  type        = string
+  default     = "production"
 }
