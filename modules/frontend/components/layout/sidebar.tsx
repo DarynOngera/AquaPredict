@@ -3,6 +3,8 @@
 import { X, Map, BarChart3, FileText, History, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { usePathname } from 'next/navigation'
+import Link from 'next/link'
 
 interface SidebarProps {
   open: boolean
@@ -10,14 +12,16 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { name: 'Map View', icon: Map, href: '/', current: true },
-  { name: 'Analytics', icon: BarChart3, href: '/analytics', current: false },
-  { name: 'Reports', icon: FileText, href: '/reports', current: false },
-  { name: 'History', icon: History, href: '/history', current: false },
-  { name: 'Settings', icon: Settings, href: '/settings', current: false },
+  { name: 'Dashboard', icon: Map, href: '/' },
+  { name: 'Analytics', icon: BarChart3, href: '/analytics' },
+  { name: 'Reports', icon: FileText, href: '/reports' },
+  { name: 'History', icon: History, href: '/history' },
+  { name: 'Settings', icon: Settings, href: '/settings' },
 ]
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  const pathname = usePathname()
+
   return (
     <>
       {/* Mobile overlay */}
@@ -48,20 +52,27 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <nav className="flex-1 space-y-1 px-3 py-4">
             {navigation.map((item) => {
               const Icon = item.icon
+              const isActive = pathname === item.href
               return (
-                <a
+                <Link
                   key={item.name}
                   href={item.href}
                   className={cn(
                     'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    item.current
+                    isActive
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
+                  onClick={() => {
+                    // Close sidebar on mobile after navigation
+                    if (window.innerWidth < 768) {
+                      onClose()
+                    }
+                  }}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
                   <span>{item.name}</span>
-                </a>
+                </Link>
               )
             })}
           </nav>
