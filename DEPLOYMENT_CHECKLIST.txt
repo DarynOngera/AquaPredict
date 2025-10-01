@@ -1,0 +1,332 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  AQUAPREDICT OCI DEPLOYMENT CHECKLIST                        ║
+║                         Version 1.0.0 - 2025-10-01                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PHASE 1: PRE-DEPLOYMENT PREPARATION
+═══════════════════════════════════════════════════════════════════════════════
+
+□ OCI Account Setup
+  □ Active OCI account with admin access
+  □ Sufficient credits/budget allocated
+  □ Compartment created (or use root compartment)
+  □ Note compartment OCID: _________________________________
+
+□ Install Required Tools
+  □ OCI CLI installed (v3.0+)
+  □ Terraform installed (v1.5+)
+  □ kubectl installed (v1.28+)
+  □ SQLPlus/Oracle Instant Client installed
+  □ Git installed
+
+□ Generate API Keys
+  □ OCI API key generated
+  □ Private key saved: ~/.oci/oci_api_key.pem
+  □ Public key uploaded to OCI Console
+  □ Fingerprint noted: _________________________________
+
+□ Configure OCI CLI
+  □ Run: oci setup config
+  □ Test: oci iam region list
+  □ Configuration verified
+
+□ SSH Key Pair
+  □ SSH key generated: ssh-keygen -t rsa -b 4096
+  □ Public key location: ~/.ssh/aquapredict_key.pub
+  □ Private key secured with proper permissions (600)
+
+□ Google Earth Engine
+  □ GEE service account created
+  □ Service account JSON downloaded
+  □ JSON content ready for terraform.tfvars
+
+□ Get OCI Information
+  □ Tenancy OCID: _________________________________
+  □ User OCID: _________________________________
+  □ Region: _________________________________
+  □ Availability Domain: _________________________________
+    (Get via: oci iam availability-domain list)
+
+PHASE 2: CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Clone Repository
+  □ git clone https://github.com/yourusername/AquaPredict.git
+  □ cd AquaPredict
+
+□ Configure Terraform Variables
+  □ cd infrastructure/terraform
+  □ cp terraform.tfvars.example terraform.tfvars
+  □ Edit terraform.tfvars with your values:
+    □ tenancy_ocid
+    □ user_ocid
+    □ fingerprint
+    □ private_key_path
+    □ region
+    □ compartment_ocid
+    □ availability_domain
+    □ db_admin_password (12-30 chars, complex)
+    □ db_wallet_password
+    □ db_app_password
+    □ ssh_public_key (paste entire key)
+    □ gee_service_account_json (single line, escaped)
+
+□ Review Configuration
+  □ All passwords meet complexity requirements
+  □ SSH key is correct format
+  □ GEE JSON is properly escaped
+  □ Region and availability domain match
+
+PHASE 3: INFRASTRUCTURE DEPLOYMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Automated Deployment (Recommended)
+  □ cd infrastructure/scripts
+  □ chmod +x deploy-infrastructure.sh
+  □ ./deploy-infrastructure.sh
+  □ Review Terraform plan
+  □ Confirm deployment (type 'yes')
+  □ Wait for completion (~15-20 minutes)
+  □ Note outputs:
+    Backend API IP: _________________________________
+    Load Balancer IP: _________________________________
+    Notebook URL: _________________________________
+
+□ Manual Deployment (Alternative)
+  □ cd infrastructure/terraform
+  □ terraform init
+  □ terraform validate
+  □ terraform plan -out=tfplan
+  □ terraform apply tfplan
+  □ terraform output > outputs.txt
+
+□ Verify Infrastructure
+  □ All resources created successfully
+  □ No errors in Terraform output
+  □ Outputs captured and saved
+
+PHASE 4: DATABASE SETUP
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Database Configuration
+  □ cd infrastructure/scripts
+  □ chmod +x setup-database.sh
+  □ ./setup-database.sh
+  □ Enter connection string when prompted
+  □ Schema created successfully
+  □ Spatial functions created
+  □ Sample data inserted (optional)
+
+□ Verify Database
+  □ Connect via SQLPlus
+  □ Check tables: SELECT COUNT(*) FROM user_tables;
+  □ Check spatial metadata: SELECT * FROM user_sdo_geom_metadata;
+  □ Test spatial function: SELECT * FROM TABLE(find_nearest_locations(-1.2921, 36.8219, 5));
+
+□ Save Database Credentials
+  □ Wallet location: ~/credentials/wallet/
+  □ Connection string saved in .env.production
+  □ Credentials stored securely
+
+PHASE 5: DATA SCIENCE SETUP
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Data Science Configuration
+  □ cd infrastructure/scripts
+  □ chmod +x setup-data-science.sh
+  □ ./setup-data-science.sh
+  □ Conda environment spec created
+  □ Training notebooks created
+  □ Deployment scripts created
+
+□ Access Notebook Session
+  □ Open notebook URL from outputs
+  □ Authenticate with OCI credentials
+  □ Notebook session accessible
+
+□ Setup Environment
+  □ In notebook terminal: conda env create -f environments/aquapredict_env.yaml
+  □ Activate environment: conda activate aquapredict_ml
+  □ Install kernel: python -m ipykernel install --user --name aquapredict_ml
+  □ Verify installation: conda list
+
+PHASE 6: COMPUTE INSTANCES
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Backend API Instance
+  □ SSH access: ssh -i ~/.ssh/aquapredict_key opc@<backend-ip>
+  □ Service running: sudo systemctl status aquapredict-api
+  □ Docker container running: sudo docker ps
+  □ Health check: curl http://localhost:8000/health
+  □ Logs accessible: sudo journalctl -u aquapredict-api -f
+
+□ Data Processor Instance
+  □ SSH access: ssh -i ~/.ssh/aquapredict_key opc@<processor-ip>
+  □ Service running: sudo systemctl status aquapredict-processor
+  □ Docker containers running: sudo docker ps
+
+□ Load Balancer
+  □ Health check: curl http://<load-balancer-ip>/health
+  □ Backend healthy in OCI Console
+  □ Response time acceptable
+
+PHASE 7: OBJECT STORAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Verify Buckets
+  □ Raw data bucket: oci os bucket get --bucket-name aquapredict-data-raw
+  □ Processed data bucket exists
+  □ Models bucket exists
+  □ Reports bucket exists
+  □ Backups bucket exists
+
+□ Test Access
+  □ Upload test file: oci os object put --bucket-name aquapredict-models --file test.txt
+  □ List objects: oci os object list --bucket-name aquapredict-models
+  □ Download test file: oci os object get --bucket-name aquapredict-models --name test.txt
+  □ Delete test file: oci os object delete --bucket-name aquapredict-models --name test.txt
+
+PHASE 8: POST-DEPLOYMENT CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+□ DNS Configuration
+  □ Point domain to Load Balancer IP
+  □ A record created: api.yourdomain.com -> <load-balancer-ip>
+  □ DNS propagation verified: nslookup api.yourdomain.com
+
+□ SSL Certificate
+  □ SSH to backend instance
+  □ Install certbot: sudo yum install certbot python3-certbot-nginx
+  □ Obtain certificate: sudo certbot --nginx -d api.yourdomain.com
+  □ Auto-renewal configured: sudo certbot renew --dry-run
+
+□ Monitoring Setup
+  □ OCI Monitoring enabled
+  □ Alarms configured for high CPU/memory
+  □ Email notifications setup
+  □ Log aggregation configured
+
+□ Backup Configuration
+  □ Database backup retention set (30 days)
+  □ Object storage lifecycle policies active
+  □ Compute instance snapshots scheduled (optional)
+
+PHASE 9: APPLICATION DEPLOYMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Load Initial Data
+  □ GEE credentials configured on backend
+  □ Test GEE connection
+  □ Load sample locations
+  □ Verify data in database
+
+□ Train Models
+  □ Access Data Science Notebook
+  □ Run training notebook: python notebooks/01_aquifer_model_training.py
+  □ Models saved to Object Storage
+  □ Model metadata in catalog
+
+□ Deploy Frontend (Optional)
+  □ Build frontend: cd modules/frontend && npm run build
+  □ Deploy to OKE or static hosting
+  □ Configure API endpoint
+  □ Test frontend access
+
+PHASE 10: TESTING & VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+□ API Testing
+  □ Health endpoint: curl http://<api-url>/health
+  □ Prediction endpoint: curl -X POST http://<api-url>/api/v1/predict/aquifer
+  □ Forecast endpoint: curl -X POST http://<api-url>/api/v1/predict/recharge
+  □ Settings endpoint: curl http://<api-url>/api/v1/settings
+  □ Export endpoint: curl -X POST http://<api-url>/api/v1/export
+
+□ Database Testing
+  □ Insert test location
+  □ Query spatial data
+  □ Test stored procedures
+  □ Verify audit logs
+
+□ Performance Testing
+  □ Load test API endpoints
+  □ Monitor response times
+  □ Check database performance
+  □ Verify auto-scaling
+
+□ Security Testing
+  □ Verify no public database access
+  □ Test SSH key authentication
+  □ Check firewall rules
+  □ Review IAM policies
+
+PHASE 11: DOCUMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Document Configuration
+  □ Save all OCIDs and connection strings
+  □ Document custom configurations
+  □ Update team wiki/documentation
+  □ Share access credentials securely
+
+□ Create Runbooks
+  □ Deployment procedure documented
+  □ Rollback procedure documented
+  □ Troubleshooting guide updated
+  □ Monitoring procedures documented
+
+PHASE 12: HANDOFF & TRAINING
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Team Training
+  □ Infrastructure overview presented
+  □ Access credentials distributed
+  □ Monitoring dashboards shared
+  □ Support procedures documented
+
+□ Operations Handoff
+  □ On-call rotation setup
+  □ Escalation procedures defined
+  □ Maintenance windows scheduled
+  □ Backup/restore procedures tested
+
+FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+□ All infrastructure deployed successfully
+□ All services healthy and accessible
+□ Database schema created and verified
+□ Models trained and deployed
+□ Monitoring and alerting configured
+□ Backups configured and tested
+□ Documentation complete
+□ Team trained and ready
+□ Production ready! 🎉
+
+═══════════════════════════════════════════════════════════════════════════════
+
+IMPORTANT INFORMATION TO SAVE:
+
+Backend API IP: _________________________________
+Load Balancer IP: _________________________________
+Database Connection: _________________________________
+Notebook URL: _________________________________
+Object Storage Namespace: _________________________________
+
+Admin Contacts:
+- Infrastructure: _________________________________
+- Database: _________________________________
+- Application: _________________________________
+
+Emergency Procedures:
+- Rollback: terraform destroy && terraform apply
+- Database Restore: Contact OCI Support
+- Incident Response: _________________________________
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Deployment Completed By: _________________________________
+Date: _________________________________
+Sign-off: _________________________________
+
+═══════════════════════════════════════════════════════════════════════════════
