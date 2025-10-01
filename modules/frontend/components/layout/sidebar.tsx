@@ -1,6 +1,6 @@
 'use client'
 
-import { X, Map, BarChart3, FileText, History, Settings } from 'lucide-react'
+import { X, Map, BarChart3, FileText, History, Settings, Database } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { usePathname } from 'next/navigation'
@@ -13,6 +13,7 @@ interface SidebarProps {
 
 const navigation = [
   { name: 'Dashboard', icon: Map, href: '/' },
+  { name: 'Datasets', icon: Database, href: '/datasets' },
   { name: 'Analytics', icon: BarChart3, href: '/analytics' },
   { name: 'Reports', icon: FileText, href: '/reports' },
   { name: 'History', icon: History, href: '/history' },
