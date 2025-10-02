@@ -41,6 +41,27 @@ export const api = {
     })
   },
 
+  // Predict precipitation (NEW - using trained models)
+  predictPrecipitation: async (location: Location, date?: string, modelName?: string) => {
+    return fetchAPI<{
+      prediction_mm: number
+      location: { lon: number; lat: number }
+      date: string
+      model: string
+      features_extracted: number
+      status: string
+      timestamp: string
+    }>('/api/inference/predict', {
+      method: 'POST',
+      body: JSON.stringify({
+        lon: location.lon,
+        lat: location.lat,
+        date: date || new Date().toISOString().split('T')[0],
+        model_name: modelName || 'random_forest',
+      }),
+    })
+  },
+
   // Forecast recharge
   forecastRecharge: async (location: Location, horizon: number = 12, useRealData: boolean = true) => {
     return fetchAPI<Forecast>('/api/v1/predict/recharge', {

@@ -1,0 +1,40 @@
+{
+  "general": {
+    "theme": "system",
+    "language": "English",
+    "timezone": "Africa/Nairobi"
+  },
+  "region": {
+    "default_region": "Kenya - National",
+    "default_location": {
+      "lat": 0.0236,
+      "lon": 37.9062
+    }
+  },
+  "map": {
+    "base_layer": "OpenStreetMap",
+    "default_zoom": 6,
+    "show_prediction_markers": true,
+    "auto_center": true
+  },
+  "models": {
+    "aquifer_model": "XGBoost",
+    "recharge_model": "LSTM",
+    "confidence_threshold": 0.6
+  },
+  "notifications": {
+    "prediction_complete": true,
+    "report_generated": true,
+    "model_updates": false,
+    "system_alerts": true
+  },
+  "data": {
+    "cache_predictions": true,
+    "use_real_data": true,
+    "data_sources": {
+      "gee": true,
+      "oracle_adb": true,
+      "oci_storage": true
+    }
+  }
+}

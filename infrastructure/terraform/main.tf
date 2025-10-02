@@ -55,21 +55,21 @@ module "database" {
   environment              = var.environment
 }
 
-# OKE Cluster
-module "oke" {
-  source = "./modules/oke"
-  
-  compartment_id      = oci_identity_compartment.aquapredict.id
-  vcn_id              = module.network.vcn_id
-  subnet_id           = module.network.private_subnet_id
-  lb_subnet_id        = module.network.public_subnet_id
-  availability_domain = var.availability_domain
-  cluster_name        = var.oke_cluster_name
-  kubernetes_version  = var.kubernetes_version
-  node_pool_size      = var.oke_node_pool_size
-  node_shape          = var.oke_node_shape
-  environment         = var.environment
-}
+# OKE Cluster - DISABLED (using direct compute deployment instead)
+# module "oke" {
+#   source = "./modules/oke"
+#   
+#   compartment_id      = oci_identity_compartment.aquapredict.id
+#   vcn_id              = module.network.vcn_id
+#   subnet_id           = module.network.private_subnet_id
+#   lb_subnet_id        = module.network.public_subnet_id
+#   availability_domain = var.availability_domain
+#   cluster_name        = var.oke_cluster_name
+#   kubernetes_version  = var.kubernetes_version
+#   node_pool_size      = var.oke_node_pool_size
+#   node_shape          = var.oke_node_shape
+#   environment         = var.environment
+# }
 
 # Object Storage
 module "object_storage" {
@@ -128,9 +128,9 @@ output "database_wallet_path" {
   value = module.database.wallet_path
 }
 
-output "oke_cluster_id" {
-  value = module.oke.cluster_id
-}
+# output "oke_cluster_id" {
+#   value = module.oke.cluster_id
+# }
 
 output "object_storage_namespace" {
   value = module.object_storage.namespace
