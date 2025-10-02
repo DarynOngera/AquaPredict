@@ -1,0 +1,143 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: '3.10'
+  NODE_VERSION: '18'
+
+jobs:
+  # Test Python modules
+  test-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [data-ingestion, preprocessing, feature-engineering, modeling, prediction-service]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+    
+    - name: Run tests
+      run: |
+        cd modules/${{ matrix.module }}
+        pytest tests/ -v --cov --cov-report=xml
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./modules/${{ matrix.module }}/coverage.xml
+        flags: ${{ matrix.module }}
+
+  # Test frontend
+  test-frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: modules/frontend/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd modules/frontend
+        npm ci
+    
+    - name: Run linter
+      run: |
+        cd modules/frontend
+        npm run lint
+    
+    - name: Run tests
+      run: |
+        cd modules/frontend
+        npm test
+
+  # Build and push Docker images
+  build-and-push:
+    needs: [test-python, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Log in to OCIR
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ secrets.OCIR_REGION }}.ocir.io
+        username: ${{ secrets.OCIR_USERNAME }}
+        password: ${{ secrets.OCIR_TOKEN }}
+    
+    - name: Build and push images
+      run: |
+        export REGISTRY="${{ secrets.OCIR_REGION }}.ocir.io/${{ secrets.OCIR_TENANCY }}"
+        export VERSION="${{ github.sha }}"
+        ./scripts/build_images.sh ${VERSION}
+        ./scripts/push_images.sh ${VERSION}
+
+  # Deploy to OCI
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up OCI CLI
+      uses: oracle-actions/configure-oci-cli@v1
+      with:
+        user-ocid: ${{ secrets.OCI_USER_OCID }}
+        tenancy-ocid: ${{ secrets.OCI_TENANCY_OCID }}
+        region: ${{ secrets.OCI_REGION }}
+        fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+        private-key: ${{ secrets.OCI_PRIVATE_KEY }}
+    
+    - name: Configure kubectl
+      run: |
+        oci ce cluster create-kubeconfig \
+          --cluster-id ${{ secrets.OKE_CLUSTER_ID }} \
+          --file ~/.kube/config \
+          --region ${{ secrets.OCI_REGION }}
+    
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl set image deployment/prediction-service \
+          api=${{ secrets.OCIR_REGION }}.ocir.io/${{ secrets.OCIR_TENANCY }}/aquapredict/prediction-service:${{ github.sha }} \
+          -n aquapredict
+        
+        kubectl set image deployment/frontend \
+          nextjs=${{ secrets.OCIR_REGION }}.ocir.io/${{ secrets.OCIR_TENANCY }}/aquapredict/frontend:${{ github.sha }} \
+          -n aquapredict
+        
+        kubectl rollout status deployment/prediction-service -n aquapredict
+        kubectl rollout status deployment/frontend -n aquapredict

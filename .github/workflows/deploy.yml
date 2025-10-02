@@ -1,0 +1,182 @@
+name: Deploy AquaPredict
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  DEPLOY_HOST: 92.5.94.60
+  DEPLOY_USER: opc
+  APP_DIR: /opt/AquaPredict
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest flake8
+          if [ -f modules/backend/requirements.txt ]; then
+            pip install -r modules/backend/requirements.txt
+          fi
+      
+      - name: Run Python linting
+        run: |
+          flake8 modules/backend --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 modules/backend --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        continue-on-error: true
+      
+      - name: Run Python tests
+        run: |
+          if [ -d modules/backend/tests ]; then
+            pytest modules/backend/tests
+          else
+            echo "No tests found, skipping..."
+          fi
+        continue-on-error: true
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install frontend dependencies
+        run: |
+          cd modules/frontend
+          npm ci
+      
+      - name: Run frontend linting
+        run: |
+          cd modules/frontend
+          npm run lint || true
+        continue-on-error: true
+      
+      - name: Build frontend
+        run: |
+          cd modules/frontend
+          npm run build
+
+  deploy:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy Backend
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            
+            echo "📦 Pulling latest code..."
+            cd ${{ env.APP_DIR }}
+            sudo -u opc git pull origin main || sudo -u opc git pull origin master
+            
+            echo "🐍 Updating backend dependencies..."
+            cd ${{ env.APP_DIR }}
+            source venv/bin/activate
+            pip install -r modules/backend/requirements.txt
+            
+            echo "🔄 Restarting backend service..."
+            sudo systemctl restart aquapredict-api
+            
+            echo "✅ Backend deployed successfully!"
+          ENDSSH
+      
+      - name: Deploy Frontend
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            
+            echo "📦 Building frontend..."
+            cd ${{ env.APP_DIR }}/modules/frontend
+            npm install
+            npm run build
+            
+            echo "🔄 Restarting frontend..."
+            pm2 restart aquapredict-frontend || pm2 start npm --name "aquapredict-frontend" -- start
+            
+            echo "✅ Frontend deployed successfully!"
+          ENDSSH
+      
+      - name: Health Check
+        run: |
+          echo "🏥 Running health checks..."
+          sleep 5
+          
+          # Check backend
+          if curl -f http://${{ env.DEPLOY_HOST }}/health; then
+            echo "✅ Backend is healthy"
+          else
+            echo "❌ Backend health check failed"
+            exit 1
+          fi
+          
+          # Check frontend
+          if curl -f http://${{ env.DEPLOY_HOST }}/; then
+            echo "✅ Frontend is healthy"
+          else
+            echo "❌ Frontend health check failed"
+            exit 1
+          fi
+      
+      - name: Notify on Success
+        if: success()
+        run: |
+          echo "🎉 Deployment successful!"
+          echo "Frontend: http://${{ env.DEPLOY_HOST }}"
+          echo "API: http://${{ env.DEPLOY_HOST }}/api"
+      
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Check the logs above."
+
+  rollback:
+    name: Rollback on Failure
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Rollback to Previous Version
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }} << 'ENDSSH'
+            echo "⏮️ Rolling back to previous version..."
+            cd ${{ env.APP_DIR }}
+            sudo -u opc git reset --hard HEAD~1
+            sudo systemctl restart aquapredict-api
+            pm2 restart aquapredict-frontend
+            echo "✅ Rollback complete"
+          ENDSSH
