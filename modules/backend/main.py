@@ -29,9 +29,14 @@ from app.routers import inference
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(levelname)s: %(message)s',
+    datefmt='%H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Set specific loggers to WARNING to reduce noise
+logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
+logging.getLogger('uvicorn.error').setLevel(logging.WARNING)
 
 # Initialize FastAPI app
 app = FastAPI(
