@@ -23,6 +23,9 @@ from settings_service import SettingsService
 from export_service import ExportService
 from simulated_data import SimulatedDataProvider
 
+# Import inference router
+from app.routers import inference
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +50,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include inference router
+app.include_router(inference.router)
 
 # Initialize services
 gee_service = GEEService()
@@ -647,23 +653,20 @@ async def get_dataset_preview(
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
-    logger.info("Starting AquaPredict Backend API...")
+    logger.info("=" * 60)
+    logger.info("Starting AquaPredict Backend API")
+    logger.info("=" * 60)
     
     # Initialize GEE
     try:
         await gee_service.initialize()
-        logger.info("GEE service initialized")
+        logger.info("Google Earth Engine initialized")
     except Exception as e:
-        logger.warning(f"GEE initialization failed: {e}")
+        logger.warning("GEE unavailable - using simulated data")
     
-    # Load models
-    try:
-        model_service.load_models()
-        logger.info("Models loaded successfully")
-    except Exception as e:
-        logger.warning(f"Model loading failed: {e}")
-    
-    logger.info("AquaPredict Backend API started successfully")
+    logger.info("=" * 60)
+    logger.info("AquaPredict API ready")
+    logger.info("=" * 60)
 
 
 @app.on_event("shutdown")

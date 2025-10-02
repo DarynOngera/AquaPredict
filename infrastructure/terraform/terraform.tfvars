@@ -38,7 +38,7 @@ compute_assign_public_ip   = false  # Private subnet doesn't allow public IPs
 compute_create_load_balancer = true
 
 # SSH Key (paste your public key here)
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCu8XcZMJsQkz70lWHuVL1OmVG6i6yCPhzfd1JXZmxhnO2w1eSHRH8lML6vnDXi9FE59zdkWcdDj3UgLvG/J2dY+jV30HqHdR8BXqXqAOMBNTj2uBB3OkdA1C+rxBsCMOsRyMmI96HiqHj9qPiP5sgmOLsg1XTIJwk/K1qlW1wYhlLg9YXlshIMEhrQUc1seiWPfupmbazg1yn6K4dzlDuoQuxtyc0IZhfwn3igIaQhWKFznl4wHxRZd3YJ55yvgUxcYp5TX/QI1ONcXEL8GogTpxAqfCyekRD55AXyuMwdmNQlis3bMcSNDLdqoqWx88tjMHdk6q/PEBmBmGJAWj/N ssh-key-2025-09-30"
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDAADH6Gr48Iw4aBb411pQ5E2tga0PDOGvVF3FgCiV6c1uzcXmW5XyQ4x8oHlaxOlsHcf1XA7UVYbPloI3B2/2bvDNVvrf37cTQTBdxLP6xMcrK/8nBXefViy3IBs7/4zz0ptKosVlRLLDoBftNbQYihJJUULOzKXkqoJx4kg+6MGU6eygqDJf/44PM/D2dXXvjOd27ujjt9EZ6lulOd0HetVOI5EMjyNVH5VC84JIwVOAfFcsw5sqp85KtoOMpDkN9phPDstAHs/Hjanc+X0FWvfbq2pAuEfo4rTqYwbDYZL95Mrno7tA2x4p6JXQuv9OMIZmvo54CT/hQeRg8wETB opc@instance-20251002-0320"
 
 # Google Earth Engine Service Account
 # Paste the entire JSON content as a single line with escaped quotes

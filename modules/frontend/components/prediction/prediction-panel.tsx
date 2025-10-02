@@ -26,7 +26,11 @@ export function PredictionPanel() {
     addToPredictionHistory,
   } = useStore()
 
-  const [activeTab, setActiveTab] = useState<'prediction' | 'forecast'>('prediction')
+  const [activeTab, setActiveTab] = useState<'prediction' | 'precipitation' | 'forecast'>('prediction')
+  const [precipitationResult, setPrecipitationResult] = useState<any>(null)
+  const [isLoadingPrecipitation, setIsLoadingPrecipitation] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [selectedModel, setSelectedModel] = useState<string>('random_forest')
 
   const handlePredict = async () => {
     if (!selectedLocation) return
@@ -41,6 +45,21 @@ export function PredictionPanel() {
       // TODO: Show error toast
     } finally {
       setIsLoadingPrediction(false)
+    }
+  }
+
+  const handlePrecipitationPredict = async () => {
+    if (!selectedLocation) return
+
+    setIsLoadingPrecipitation(true)
+    try {
+      const result = await api.predictPrecipitation(selectedLocation, selectedDate, selectedModel)
+      setPrecipitationResult(result)
+    } catch (error) {
+      console.error('Precipitation prediction failed:', error)
+      // TODO: Show error toast
+    } finally {
+      setIsLoadingPrecipitation(false)
     }
   }
 
@@ -98,7 +117,17 @@ export function PredictionPanel() {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          Aquifer Prediction
+          Aquifer
+        </button>
+        <button
+          onClick={() => setActiveTab('precipitation')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            activeTab === 'precipitation'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Precipitation
         </button>
         <button
           onClick={() => setActiveTab('forecast')}
@@ -108,7 +137,7 @@ export function PredictionPanel() {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          Recharge Forecast
+          Forecast
         </button>
       </div>
 
@@ -179,6 +208,101 @@ export function PredictionPanel() {
                   disabled={isLoadingPrediction}
                 >
                   Reanalyze
+                </Button>
+              </div>
+            )}
+          </>
+        ) : activeTab === 'precipitation' ? (
+          <>
+            {/* Date and Model Selection */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Date</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Model</label>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                >
+                  <option value="random_forest">Random Forest</option>
+                  <option value="xgboost">XGBoost</option>
+                  <option value="linear_regression">Linear Regression</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Prediction Button */}
+            {!precipitationResult && (
+              <Button
+                onClick={handlePrecipitationPredict}
+                disabled={isLoadingPrecipitation}
+                className="w-full"
+                size="lg"
+              >
+                {isLoadingPrecipitation ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Predicting...
+                  </>
+                ) : (
+                  <>
+                    <Droplets className="mr-2 h-4 w-4" />
+                    Predict Precipitation
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* Precipitation Results */}
+            {precipitationResult && (
+              <div className="space-y-4 animate-fade-in">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Precipitation Prediction</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="text-center py-4">
+                      <div className="text-4xl font-bold text-primary">
+                        {precipitationResult.prediction_mm.toFixed(2)} mm
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Predicted precipitation
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Model</span>
+                      <Badge variant="outline">{precipitationResult.model}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Date</span>
+                      <span className="font-medium">{precipitationResult.date}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Features Used</span>
+                      <span className="font-medium">{precipitationResult.features_extracted}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Status</span>
+                      <Badge className="bg-green-500">{precipitationResult.status}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Button
+                  onClick={handlePrecipitationPredict}
+                  variant="outline"
+                  className="w-full"
+                  disabled={isLoadingPrecipitation}
+                >
+                  Repredict
                 </Button>
               </div>
             )}
