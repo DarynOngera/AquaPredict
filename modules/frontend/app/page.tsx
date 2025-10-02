@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/header'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MapView } from '@/components/map/map-view'
 import { PredictionPanel } from '@/components/prediction/prediction-panel'
+import OracleDashboard from '@/components/oracle-dashboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useStore } from '@/lib/store'
 import { Droplets, TrendingUp, Activity, AlertTriangle } from 'lucide-react'
@@ -65,6 +66,11 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Oracle Cloud Dashboard */}
+          <div className="px-6 py-4 border-b bg-white dark:bg-gray-900">
+            <OracleDashboard />
           </div>
 
           {/* Main Content Area */}
