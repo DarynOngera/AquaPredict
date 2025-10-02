@@ -179,15 +179,59 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    from app.services.model_service import get_model_service
+    from app.services.oracle_data_service import get_oracle_data_service
+    
+    inference_model_service = get_model_service()
+    models_loaded = len(inference_model_service.models) > 0
+    
+    oracle_service = get_oracle_data_service()
+    
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
+        "infrastructure": "Oracle Cloud Infrastructure",
         "services": {
+            "oracle_atp": oracle_service.is_available(),
             "gee": gee_service.is_available(),
-            "models": model_service.models_loaded,
+            "models": models_loaded,
             "settings": True,
             "export": True
-        }
+        },
+        "data_source": "Oracle Autonomous Database" if oracle_service.is_available() else "Fallback"
+    }
+
+
+# ============================================================================
+# ORACLE AUTONOMOUS DATABASE ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/oracle/precipitation/latest")
+async def get_latest_precipitation(days: int = 7):
+    """Get latest precipitation data from Oracle ATP"""
+    from app.services.oracle_data_service import get_oracle_data_service
+    
+    oracle_service = get_oracle_data_service()
+    data = oracle_service.get_latest_precipitation(days)
+    
+    return {
+        "data": data,
+        "source": "Oracle Autonomous Database",
+        "infrastructure": "Oracle Cloud Infrastructure"
+    }
+
+@app.get("/api/v1/oracle/precipitation/monthly")
+async def get_monthly_precipitation(year: Optional[int] = None):
+    """Get monthly precipitation summary from Oracle ATP"""
+    from app.services.oracle_data_service import get_oracle_data_service
+    
+    oracle_service = get_oracle_data_service()
+    data = oracle_service.get_monthly_summary(year)
+    
+    return {
+        "data": data,
+        "source": "Oracle Autonomous Database",
+        "infrastructure": "Oracle Cloud Infrastructure"
     }
 
 
