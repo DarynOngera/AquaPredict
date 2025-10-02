@@ -4,10 +4,12 @@ Uses precomputed features from training data or defaults for new locations
 """
 
 import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from datetime import datetime
+import pandas as pd
 import logging
+
+from app.services.live_data_service import get_live_data_service
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +104,8 @@ class InferencePipeline:
         date: datetime
     ) -> Dict[str, float]:
         """
-        Get precomputed features for a location from historical data
+        Get historical/meteorological features for a location
+        Uses live data API when available, falls back to estimates
         
         Args:
             lon: Longitude
@@ -110,21 +113,27 @@ class InferencePipeline:
             date: Target date
         
         Returns:
-            Dictionary of meteorological features (or zeros for unseen locations)
+            Dictionary with precipitation lags and meteorological features
         """
-        # If we have historical data, try to find matching location
+        # Try to fetch live data from API
+        try:
+            live_service = get_live_data_service()
+            features = live_service.fetch_current_features(lon, lat)
+            logger.info(f"Using live data for ({lon:.4f}, {lat:.4f})")
+            return features
+        except Exception as e:
+            logger.warning(f"Live data unavailable, using estimates: {e}")
+        
+        # Fallback: Try historical data
         if self.historical_data is not None:
-            # Find closest point in historical data (within tolerance)
-            tolerance = 0.01  # ~1km
+            tolerance = 0.1  # degrees
             mask = (
                 (np.abs(self.historical_data['longitude'] - lon) < tolerance) &
                 (np.abs(self.historical_data['latitude'] - lat) < tolerance)
             )
             
             if mask.any():
-                # Get most recent data for this location
                 location_data = self.historical_data[mask].iloc[-1]
-                
                 return {
                     'lag1_precip': location_data.get('lag1_precip', 0.0),
                     'lag2_precip': location_data.get('lag2_precip', 0.0),
@@ -138,22 +147,22 @@ class InferencePipeline:
                     'v10': location_data.get('v10', 0.0),
                 }
         
-        # Default to reasonable average values for unseen coordinates
-        logger.debug(f"Using regional averages for ({lon:.4f}, {lat:.4f})")
+        # Final fallback: location-based estimates
+        logger.debug(f"Using location estimates for ({lon:.4f}, {lat:.4f})")
+        temp_base = 25.0 - (abs(lat) * 1.2) + (lon - 38) * 0.3
+        precip_base = max(0.1, min(1.0 + (lon - 36) * 0.8 + abs(lat) * 0.5, 15.0))
+        
         return {
-            # Precipitation lags (mm) - typical daily values
-            'lag1_precip': 2.5,
-            'lag2_precip': 2.5,
-            'roll3_precip': 2.5,
-            'roll7_precip': 2.5,
-            
-            # Meteorological features - typical East Africa values
-            '2m_air_temp': 22.0,      # °C - typical temperature
-            'dewpoint_2m': 15.0,       # °C - typical dewpoint
-            'mslp': 1013.25,           # hPa - sea level pressure
-            'surface_pressure': 950.0, # hPa - adjusted for elevation
-            'u10': 2.0,                # m/s - typical zonal wind
-            'v10': 1.5,                # m/s - typical meridional wind
+            'lag1_precip': precip_base,
+            'lag2_precip': precip_base * 0.85,
+            'roll3_precip': precip_base * 0.92,
+            'roll7_precip': precip_base * 0.88,
+            '2m_air_temp': temp_base,
+            'dewpoint_2m': temp_base - 7.0,
+            'mslp': 1013.0 - (abs(lat) * 0.8),
+            'surface_pressure': 950.0 - (abs(lat) * 3.0),
+            'u10': -1.0 + (lon - 38) * 0.4,
+            'v10': 0.5 + lat * 0.3,
         }
     
     
@@ -202,40 +211,51 @@ class InferencePipeline:
         model
     ) -> Dict:
         """
-        Make prediction for a point
+        Make prediction for a single point
         
         Args:
             lon: Longitude
-            lat: Latitude
+            lat: Latitude  
             date: Target date
-            model: Trained model (sklearn/xgboost)
+            model: Loaded model object
         
         Returns:
-            Dictionary with prediction and metadata
+            Dictionary with prediction results
         """
         try:
             # Build feature vector
             features = self.build_feature_vector(lon, lat, date)
             
+            # Log feature values for debugging
+            logger.debug(f"Features: temp={features['2m_air_temp'].values[0]:.1f}°C, "
+                        f"precip_lag1={features['lag1_precip'].values[0]:.2f}mm")
+            
             # Make prediction
-            prediction = model.predict(features)[0]
+            prediction = model.predict(features.values)[0]
+            
+            # Log if prediction seems stuck
+            if abs(prediction - 0.01) < 0.001:
+                logger.warning(f"Low prediction (0.01mm) at ({lon:.2f}, {lat:.2f}) - "
+                             f"temp={features['2m_air_temp'].values[0]:.1f}, "
+                             f"lag1={features['lag1_precip'].values[0]:.2f}")
             
             return {
                 'prediction': float(prediction),
                 'location': {'lon': lon, 'lat': lat},
-                'date': date.isoformat(),
+                'date': date.strftime('%Y-%m-%d'),
                 'features_used': len(self.feature_names),
                 'status': 'success'
             }
-            
+        
         except Exception as e:
             logger.error(f"Prediction failed: {e}")
             return {
-                'prediction': None,
+                'prediction': 0.0,
                 'location': {'lon': lon, 'lat': lat},
-                'date': date.isoformat(),
-                'error': str(e),
-                'status': 'failed'
+                'date': date.strftime('%Y-%m-%d'),
+                'features_used': 0,
+                'status': 'failed',
+                'error': str(e)
             }
 
 
