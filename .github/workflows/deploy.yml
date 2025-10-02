@@ -1,0 +1,72 @@
+name: Deploy AquaPredict
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  DEPLOY_HOST: 92.5.94.60
+  DEPLOY_USER: opc
+  APP_DIR: /opt/AquaPredict
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy Backend
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            
+            echo "📦 Pulling latest code..."
+            cd ${{ env.APP_DIR }}
+            sudo -u opc git pull origin main || sudo -u opc git pull origin master
+            
+            echo "🐍 Updating backend dependencies..."
+            cd ${{ env.APP_DIR }}
+            source venv/bin/activate
+            pip install -r modules/backend/requirements.txt
+            
+            echo "🔄 Restarting backend service..."
+            sudo systemctl restart aquapredict-api
+            
+            echo "✅ Backend deployed successfully!"
+          ENDSSH
+      
+      - name: Deploy Frontend
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            
+            echo "📦 Building frontend..."
+            cd ${{ env.APP_DIR }}/modules/frontend
+            npm install
+            npm run build
+            
+            echo "🔄 Restarting frontend..."
+            pm2 restart aquapredict-frontend || pm2 start npm --name "aquapredict-frontend" -- start
+            
+            echo "✅ Frontend deployed successfully!"
+          ENDSSH
+      
+      - name: Deployment Complete
+        run: |
+          echo "Deployment finished!"
+          echo "Frontend: http://${{ env.DEPLOY_HOST }}"
+          echo "API: http://${{ env.DEPLOY_HOST }}/api"
