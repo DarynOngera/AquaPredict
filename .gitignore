@@ -1,0 +1,137 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Python lib directories (but not frontend lib/)
+/lib/
+modules/*/lib/
+!modules/frontend/lib/
+!modules/frontend/src/
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Credentials
+*credentials*.json
+*service-account*.json
+.earthengine/
+gee_credentials.json
+
+# Data files
+data/raw/
+data/processed/
+data/cache/
+*.tif
+*.geotiff
+*.shp
+*.shx
+*.dbf
+*.prj
+*.h5
+*.hdf5
+*.nc
+*.zarr
+
+# Models
+models/trained/
+models/checkpoints/
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.onnx
+
+# Logs
+logs/
+*.log
+airflow-logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.next/
+out/
+build/
+dist/
+
+# Docker
+*.tar
+docker-compose.override.yml
+
+# Oracle
+wallet/
+*.sso
+*.p12
+tnsnames.ora
+sqlnet.ora
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# OCI
+oci_config
+oci_api_key.pem
+
+# Reports
+reports/generated/
+*.pdf
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+/credentials
+credentials/
