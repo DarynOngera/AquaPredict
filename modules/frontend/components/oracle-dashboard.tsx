@@ -78,7 +78,7 @@ export default function OracleDashboard() {
       </div>
 
       {/* Precipitation Data from Oracle ATP */}
-      {precipData && (
+      {precipData && precipData.avg_precip !== undefined && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Average Precipitation */}
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -87,10 +87,10 @@ export default function OracleDashboard() {
               <TrendingUp className="w-4 h-4 text-blue-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {precipData.avg_precip.toFixed(2)} mm
+              {(precipData.avg_precip || 0).toFixed(2)} mm
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Last {precipData.period_days} days
+              Last {precipData.period_days || 7} days
             </p>
           </div>
 
@@ -101,7 +101,7 @@ export default function OracleDashboard() {
               <TrendingUp className="w-4 h-4 text-red-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {precipData.max_precip.toFixed(2)} mm
+              {(precipData.max_precip || 0).toFixed(2)} mm
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Peak rainfall
@@ -115,7 +115,7 @@ export default function OracleDashboard() {
               <Database className="w-4 h-4 text-green-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {precipData.total_precip.toFixed(2)} mm
+              {(precipData.total_precip || 0).toFixed(2)} mm
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Cumulative
@@ -129,7 +129,7 @@ export default function OracleDashboard() {
               <Activity className="w-4 h-4 text-purple-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {precipData.days_count}
+              {precipData.days_count || 0}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               From Oracle ATP

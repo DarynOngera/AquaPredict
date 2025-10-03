@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/predictions", tags=["predictions"])
 
 class PredictionRequest(BaseModel):
     """Request model for precipitation prediction"""
+    model_config = {"protected_namespaces": ()}
     
     features: Dict[str, float] = Field(
         ...,

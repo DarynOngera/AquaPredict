@@ -1,6 +1,6 @@
 'use client'
 
-import { X, Map, BarChart3, FileText, History, Settings, Database } from 'lucide-react'
+import { X, Map, BarChart3, FileText, History, Settings, Database, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { usePathname } from 'next/navigation'
@@ -9,6 +9,7 @@ import Link from 'next/link'
 interface SidebarProps {
   open: boolean
   onClose: () => void
+  onToggle?: () => void
 }
 
 const navigation = [
@@ -20,8 +21,9 @@ const navigation = [
   { name: 'Settings', icon: Settings, href: '/settings' },
 ]
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const handleToggle = onToggle || onClose
 
   return (
     <>
@@ -33,19 +35,42 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         />
       )}
 
+      {/* Open button when sidebar is closed (desktop only) */}
+      {!open && (
+        <button
+          onClick={handleToggle}
+          className="hidden md:flex fixed left-0 top-20 z-40 items-center justify-center w-8 h-12 bg-card border border-l-0 rounded-r-lg shadow-md hover:bg-muted transition-colors"
+          aria-label="Open sidebar"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      )}
+
       {/* Sidebar */}
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 transform border-r bg-card transition-transform duration-300 ease-in-out md:relative md:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full'
-        )}
-      >
+      {open && (
+        <aside
+          className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-card transition-all duration-300 ease-in-out md:relative md:flex md:flex-col"
+        >
         <div className="flex h-full flex-col">
-          {/* Close button (mobile) */}
-          <div className="flex h-16 items-center justify-between px-4 md:hidden">
+          {/* Header with toggle button */}
+          <div className="flex h-16 items-center justify-between px-4 border-b">
             <span className="text-sm font-semibold">Navigation</span>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-5 w-5" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => {
+                // On mobile, close. On desktop, toggle
+                if (window.innerWidth < 768) {
+                  onClose()
+                } else {
+                  handleToggle()
+                }
+              }}
+              className="hover:bg-muted"
+            >
+              {/* Show X on mobile, chevron on desktop */}
+              <X className="h-5 w-5 md:hidden" />
+              <ChevronLeft className="h-5 w-5 hidden md:block" />
             </Button>
           </div>
 
@@ -97,7 +122,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </div>
           </div>
         </div>
-      </aside>
+        </aside>
+      )}
     </>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
 import { Sidebar } from '@/components/layout/sidebar'
+import OracleDataView from '@/components/oracle-data-view'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -127,14 +128,17 @@ export default function DatasetsPage() {
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         
         <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto p-6 space-y-6">
+          <div className="container mx-auto p-4 sm:p-6 space-y-6">
+            {/* Oracle Cloud Data Section */}
+            <OracleDataView />
+
             {/* Page Header */}
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Database className="h-8 w-8" />
+            <div className="pt-6">
+              <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+                <Database className="h-6 w-6 sm:h-8 sm:w-8" />
                 GEE Datasets
               </h1>
-              <p className="text-muted-foreground mt-1">
+              <p className="text-sm sm:text-base text-muted-foreground mt-1">
                 Google Earth Engine datasets used for aquifer prediction
               </p>
               

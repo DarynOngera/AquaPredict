@@ -9,6 +9,10 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import os
+import warnings
+
+# Suppress pandas SQLAlchemy warning for oracledb
+warnings.filterwarnings('ignore', message='pandas only supports SQLAlchemy')
 
 logger = logging.getLogger(__name__)
 
@@ -20,27 +24,42 @@ class OracleDataService:
         """Initialize Oracle ATP connection"""
         self.user = os.getenv('ORACLE_USER', 'admin')
         self.password = os.getenv('ORACLE_PASSWORD')
-        self.dsn = os.getenv('ORACLE_DSN', 'aquapredict_high')
-        self.wallet_location = os.getenv('ORACLE_WALLET_LOCATION')
+        self.dsn = os.getenv('ORACLE_DSN', 'hk005k69b4rnpald_high')
+        self.wallet_location = os.getenv('ORACLE_WALLET_LOCATION', '/home/ongera/oracle_wallet')
         
         self.connection = None
-        self._connect()
+        self._connection_attempted = False
+        
+        # Don't connect immediately - connect on first use
+        if self.password:
+            self._connect()
     
     def _connect(self):
-        """Establish connection to Oracle ATP"""
+        """Establish connection to Oracle ATP using thin mode"""
+        if self._connection_attempted:
+            return
+        
+        self._connection_attempted = True
+        
         try:
-            if self.wallet_location:
-                oracledb.init_oracle_client(config_dir=self.wallet_location)
+            if not self.password:
+                logger.warning("Oracle password not set, skipping connection")
+                return
             
+            # Use thin mode (no Oracle Client installation required)
             self.connection = oracledb.connect(
                 user=self.user,
                 password=self.password,
-                dsn=self.dsn
+                dsn=self.dsn,
+                config_dir=self.wallet_location,
+                wallet_location=self.wallet_location,
+                wallet_password="WalletPassword123!"
             )
-            logger.info("✓ Connected to Oracle Autonomous Database")
+            logger.info(f"✓ Connected to Oracle ATP: {self.dsn}")
             
         except Exception as e:
             logger.error(f"Oracle ATP connection failed: {e}")
+            logger.error(f"  User: {self.user}, DSN: {self.dsn}, Wallet: {self.wallet_location}")
             self.connection = None
     
     def is_available(self) -> bool:
@@ -71,24 +90,24 @@ class OracleDataService:
         try:
             query = """
             SELECT 
-                date,
+                "DATE",
                 precip,
-                TO_CHAR(date, 'YYYY-MM') as year_month,
-                EXTRACT(MONTH FROM date) as month,
-                EXTRACT(YEAR FROM date) as year
+                TO_CHAR("DATE", 'YYYY-MM') as year_month,
+                EXTRACT(MONTH FROM "DATE") as month,
+                EXTRACT(YEAR FROM "DATE") as year
             FROM CHIRPS_PRECIP_EXPORT
             """
             
             conditions = []
             if start_date:
-                conditions.append(f"date >= TO_DATE('{start_date}', 'YYYY-MM-DD')")
+                conditions.append(f"\"DATE\" >= TO_DATE('{start_date}', 'YYYY-MM-DD')")
             if end_date:
-                conditions.append(f"date <= TO_DATE('{end_date}', 'YYYY-MM-DD')")
+                conditions.append(f"\"DATE\" <= TO_DATE('{end_date}', 'YYYY-MM-DD')")
             
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
             
-            query += f" ORDER BY date DESC FETCH FIRST {limit} ROWS ONLY"
+            query += f" ORDER BY \"DATE\" DESC FETCH FIRST {limit} ROWS ONLY"
             
             df = pd.read_sql(query, self.connection)
             logger.info(f"Retrieved {len(df)} rows from Oracle ATP")
@@ -100,10 +119,10 @@ class OracleDataService:
     
     def get_latest_precipitation(self, days: int = 7) -> Dict:
         """
-        Get latest precipitation data for the past N days
+        Get latest precipitation data for the most recent N days in database
         
         Args:
-            days: Number of days to look back
+            days: Number of days to retrieve
         
         Returns:
             Dictionary with precipitation statistics
@@ -112,15 +131,22 @@ class OracleDataService:
             return {}
         
         try:
+            # Get the most recent N days from the database (not relative to today)
             query = f"""
             SELECT 
                 AVG(precip) as avg_precip,
                 MAX(precip) as max_precip,
                 MIN(precip) as min_precip,
                 SUM(precip) as total_precip,
-                COUNT(*) as days_count
-            FROM CHIRPS_PRECIP_EXPORT
-            WHERE date >= SYSDATE - {days}
+                COUNT(*) as days_count,
+                MIN("DATE") as start_date,
+                MAX("DATE") as end_date
+            FROM (
+                SELECT precip, "DATE"
+                FROM CHIRPS_PRECIP_EXPORT
+                ORDER BY "DATE" DESC
+                FETCH FIRST {days} ROWS ONLY
+            )
             """
             
             cursor = self.connection.cursor()
@@ -128,14 +154,16 @@ class OracleDataService:
             row = cursor.fetchone()
             cursor.close()
             
-            if row:
+            if row and row[0] is not None:
                 return {
-                    'avg_precip': float(row[0]) if row[0] else 0,
+                    'avg_precip': float(row[0]),
                     'max_precip': float(row[1]) if row[1] else 0,
                     'min_precip': float(row[2]) if row[2] else 0,
                     'total_precip': float(row[3]) if row[3] else 0,
                     'days_count': int(row[4]) if row[4] else 0,
                     'period_days': days,
+                    'start_date': row[5].isoformat() if row[5] else None,
+                    'end_date': row[6].isoformat() if row[6] else None,
                     'data_source': 'Oracle Autonomous Database'
                 }
             
@@ -153,7 +181,7 @@ class OracleDataService:
             year: Year to filter (optional)
         
         Returns:
-            List of monthly summaries
+            List of monthly summaries with proper formatting
         """
         if not self.is_available():
             return []
@@ -161,9 +189,9 @@ class OracleDataService:
         try:
             query = """
             SELECT 
-                TO_CHAR(date, 'YYYY-MM') as year_month,
-                EXTRACT(YEAR FROM date) as year,
-                EXTRACT(MONTH FROM date) as month,
+                TO_CHAR(\"DATE\", 'YYYY-MM') as year_month,
+                EXTRACT(YEAR FROM \"DATE\") as year,
+                EXTRACT(MONTH FROM \"DATE\") as month,
                 COUNT(*) as days_count,
                 AVG(precip) as avg_precip,
                 MAX(precip) as max_precip,
@@ -172,16 +200,30 @@ class OracleDataService:
             """
             
             if year:
-                query += f" WHERE EXTRACT(YEAR FROM date) = {year}"
+                query += f" WHERE EXTRACT(YEAR FROM \"DATE\") = {year}"
             
             query += """
-            GROUP BY TO_CHAR(date, 'YYYY-MM'), EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
+            GROUP BY TO_CHAR(\"DATE\", 'YYYY-MM'), EXTRACT(YEAR FROM \"DATE\"), EXTRACT(MONTH FROM \"DATE\")
             ORDER BY year_month
             """
             
-            df = pd.read_sql(query, self.connection)
+            cursor = self.connection.cursor()
+            cursor.execute(query)
             
-            return df.to_dict('records')
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    'year_month': row[0],
+                    'year': int(row[1]),
+                    'month': int(row[2]),
+                    'days_count': int(row[3]),
+                    'avg_precip': float(row[4]) if row[4] else 0,
+                    'max_precip': float(row[5]) if row[5] else 0,
+                    'total_precip': float(row[6]) if row[6] else 0
+                })
+            
+            cursor.close()
+            return results
             
         except Exception as e:
             logger.error(f"Failed to get monthly summary: {e}")
@@ -212,11 +254,11 @@ class OracleDataService:
             # Get data for the specific date or nearest date
             query = """
             SELECT 
-                date,
+                \"DATE\",
                 precip,
-                ABS(date - TO_DATE(:target_date, 'YYYY-MM-DD')) as date_diff
+                ABS(\"DATE\" - TO_DATE(:target_date, 'YYYY-MM-DD')) as date_diff
             FROM CHIRPS_PRECIP_EXPORT
-            WHERE date BETWEEN TO_DATE(:target_date, 'YYYY-MM-DD') - 7 
+            WHERE \"DATE\" BETWEEN TO_DATE(:target_date, 'YYYY-MM-DD') - 7 
                           AND TO_DATE(:target_date, 'YYYY-MM-DD')
             ORDER BY date_diff
             FETCH FIRST 1 ROW ONLY

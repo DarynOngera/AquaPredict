@@ -16,6 +16,15 @@ import os
 from pathlib import Path
 import io
 import csv
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+env_path = Path(__file__).parent.parent.parent / '.env'
+load_dotenv(env_path)
+print(f"Loaded .env from: {env_path}")
+print(f"Oracle User: {os.getenv('ORACLE_USER')}")
+print(f"Oracle DSN: {os.getenv('ORACLE_DSN')}")
+print(f"Oracle Password set: {'Yes' if os.getenv('ORACLE_PASSWORD') else 'No'}")
 
 from gee_service import GEEService
 from model_service import ModelService
@@ -23,8 +32,8 @@ from settings_service import SettingsService
 from export_service import ExportService
 from simulated_data import SimulatedDataProvider
 
-# Import inference router
-from app.routers import inference
+# Import routers
+from app.routers import inference, oracle, analytics
 
 # Configure logging
 logging.basicConfig(
@@ -56,8 +65,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include inference router
+# Include routers
 app.include_router(inference.router)
+app.include_router(oracle.router)
+app.include_router(analytics.router)
 
 # Initialize services
 gee_service = GEEService()

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class PointPredictionRequest(BaseModel):
     """Request model for point-based prediction"""
+    model_config = {"protected_namespaces": ()}
     
     lon: float = Field(..., description="Longitude", ge=-180, le=180, example=36.8219)
     lat: float = Field(..., description="Latitude", ge=-90, le=90, example=-1.2921)
@@ -35,7 +36,9 @@ class PointPredictionRequest(BaseModel):
 class PointPredictionResponse(BaseModel):
     """Response model for point prediction"""
     
-    prediction_mm: float = Field(..., description="Predicted precipitation in mm")
+    prediction_mm: float = Field(..., description="Predicted precipitation in mm (with realistic variation)")
+    base_prediction: Optional[float] = Field(None, description="Base model prediction before variation")
+    uncertainty: Optional[float] = Field(None, description="Prediction uncertainty/variation in mm")
     location: dict = Field(..., description="Location coordinates")
     date: str = Field(..., description="Prediction date")
     model: str = Field(..., description="Model used")
@@ -46,6 +49,7 @@ class PointPredictionResponse(BaseModel):
 
 class BatchPredictionRequest(BaseModel):
     """Request model for batch predictions"""
+    model_config = {"protected_namespaces": ()}
     
     points: list[dict] = Field(
         ...,
@@ -157,6 +161,8 @@ async def predict_point(request: PointPredictionRequest):
         
         return PointPredictionResponse(
             prediction_mm=result['prediction'],
+            base_prediction=result.get('base_prediction'),
+            uncertainty=result.get('uncertainty'),
             location=result['location'],
             date=result['date'],
             model=model_name,
