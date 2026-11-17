@@ -33,7 +33,7 @@ import {
   AreaChart
 } from 'recharts'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 export default function AnalyticsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)

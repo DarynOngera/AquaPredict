@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useStore } from '@/lib/store'
 import { Droplets, TrendingUp, Activity, AlertTriangle } from 'lucide-react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)

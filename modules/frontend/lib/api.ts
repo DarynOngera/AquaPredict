@@ -1,6 +1,6 @@
 import { Location, Prediction, Forecast } from './store'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 class APIError extends Error {
   constructor(public status: number, message: string) {

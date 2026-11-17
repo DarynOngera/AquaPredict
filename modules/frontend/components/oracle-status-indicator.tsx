@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Database, CheckCircle, XCircle, Activity } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 export function OracleStatusIndicator() {
   const [status, setStatus] = useState<{
