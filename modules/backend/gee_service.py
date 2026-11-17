@@ -25,7 +25,7 @@ class GEEService:
         try:
             # Try default authentication first (personal account)
             try:
-                project = os.getenv('GEE_PROJECT', 'aquapredict-473718')
+                project = os.getenv('GEE_PROJECT') or 'aquapredict-473718'
                 ee.Initialize(project=project)
                 logger.info(f"GEE initialized with default credentials (project: {project})")
                 self.initialized = True
@@ -48,7 +48,11 @@ class GEEService:
             
             if service_account and os.path.exists(key_file):
                 credentials = ee.ServiceAccountCredentials(service_account, key_file)
-                ee.Initialize(credentials)
+                project = os.getenv('GEE_PROJECT')
+                if project:
+                    ee.Initialize(credentials, project=project)
+                else:
+                    ee.Initialize(credentials)
                 logger.info("GEE initialized with service account")
                 self.initialized = True
                 return

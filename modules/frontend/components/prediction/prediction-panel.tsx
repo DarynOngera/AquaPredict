@@ -282,14 +282,6 @@ export function PredictionPanel() {
                       <Badge variant="outline">{precipitationResult.model}</Badge>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Input data</span>
-                      <Badge variant="outline">
-                        {precipitationResult.data_source === 'live_open_meteo'
-                          ? 'Live Open-Meteo'
-                          : 'Fallback estimate'}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Date</span>
                       <span className="font-medium">{precipitationResult.date}</span>
                     </div>

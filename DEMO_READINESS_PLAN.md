@@ -118,12 +118,18 @@ approved deployment channel.
 - OCI tenancy/compartment access only if a new VM, public IP, or DNS resource
   must be created.
 
+### Required for live satellite-backed aquifer/recharge features
+
+- GEE project ID with Earth Engine enabled.
+- GEE service-account email and its JSON private-key file, stored outside the
+  repository as `credentials/gee_key.json` (or in the configured credential
+  directory).
+- Confirmation that the service account is authorized to use the GEE project.
+
 ### Optional — not required for the core model demo
 
 - Oracle database connection details and wallet: only if the Oracle dashboard
   must use genuine data.
-- GEE service-account credentials: only if the demo must use live satellite
-  features rather than the currently implemented fallback estimates.
 - Mapbox token: not needed for the current map, which uses public OSM/Esri
   tile layers.
 

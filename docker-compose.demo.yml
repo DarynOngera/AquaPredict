@@ -6,6 +6,11 @@ services:
     environment:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
       MODEL_ARTIFACTS_DIR: /app/model_artifacts
+      GEE_PROJECT: ${GEE_PROJECT:-}
+      GEE_SERVICE_ACCOUNT: ${GEE_SERVICE_ACCOUNT:-}
+      GEE_PRIVATE_KEY_FILE: /app/credentials/gee_key.json
+    volumes:
+      - ${GEE_CREDENTIALS_DIR:-./credentials}:/app/credentials:ro
     expose:
       - "8000"
     healthcheck:
