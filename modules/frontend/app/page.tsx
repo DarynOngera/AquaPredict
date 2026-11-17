@@ -14,7 +14,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showWelcome, setShowWelcome] = useState(true)
-  const [legendMinimized, setLegendMinimized] = useState(false)
   const [stats, setStats] = useState({
     totalPredictions: 0,
     successRate: 0,
@@ -125,55 +124,6 @@ export default function DashboardPage() {
             {/* Map Section */}
             <div className="flex-1 relative">
               <MapView />
-              
-              {/* Minimizable Legend */}
-              <div className="absolute bottom-4 left-4 z-[999]">
-                <Card className={`shadow-lg border-2 border-blue-200 dark:border-blue-800 transition-all duration-300 ${
-                  legendMinimized ? 'w-12' : 'w-auto'
-                }`}>
-                  <div className="p-3 flex items-center justify-between">
-                    {!legendMinimized && (
-                      <span className="text-sm font-semibold">Map Legend</span>
-                    )}
-                    <button 
-                      onClick={() => setLegendMinimized(!legendMinimized)}
-                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors flex-shrink-0"
-                      aria-label={legendMinimized ? "Expand legend" : "Minimize legend"}
-                      type="button"
-                    >
-                      {legendMinimized ? (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                  {!legendMinimized && (
-                    <div className="px-3 pb-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-green-500 shadow-sm"></div>
-                        <span className="text-xs text-gray-700 dark:text-gray-300">High potential</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-yellow-500 shadow-sm"></div>
-                        <span className="text-xs text-gray-700 dark:text-gray-300">Moderate potential</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-red-500 shadow-sm"></div>
-                        <span className="text-xs text-gray-700 dark:text-gray-300">Low potential</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-blue-500 shadow-sm"></div>
-                        <span className="text-xs text-gray-700 dark:text-gray-300">Infrastructure</span>
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              </div>
               
               {!selectedLocation && showWelcome && (
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] pointer-events-none px-4">

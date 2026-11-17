@@ -41,6 +41,8 @@ export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
           onClick={handleToggle}
           className="hidden md:flex fixed left-0 top-20 z-40 items-center justify-center w-8 h-12 bg-card border border-l-0 rounded-r-lg shadow-md hover:bg-muted transition-colors"
           aria-label="Open sidebar"
+          aria-expanded={false}
+          aria-controls="primary-navigation"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
@@ -49,6 +51,8 @@ export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
       {/* Sidebar */}
       {open && (
         <aside
+          id="primary-navigation"
+          aria-label="Primary navigation"
           className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-card transition-all duration-300 ease-in-out md:relative md:flex md:flex-col"
         >
         <div className="flex h-full flex-col">
@@ -67,6 +71,8 @@ export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
                 }
               }}
               className="hover:bg-muted"
+              aria-label="Close sidebar"
+              aria-expanded={true}
             >
               {/* Show X on mobile, chevron on desktop */}
               <X className="h-5 w-5 md:hidden" />
@@ -95,6 +101,7 @@ export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
                       onClose()
                     }
                   }}
+                  aria-current={isActive ? 'page' : undefined}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
                   <span>{item.name}</span>
