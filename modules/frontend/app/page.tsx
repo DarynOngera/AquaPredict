@@ -1,66 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Header } from '@/components/layout/header'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MapView } from '@/components/map/map-view'
 import { PredictionPanel } from '@/components/prediction/prediction-panel'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useStore } from '@/lib/store'
-import { Droplets, TrendingUp, Activity, AlertTriangle } from 'lucide-react'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showWelcome, setShowWelcome] = useState(true)
-  const [stats, setStats] = useState({
-    totalPredictions: 0,
-    successRate: 0,
-    activeWells: 0,
-    areasAtRisk: 0
-  })
-  const { selectedLocation, prediction, setSelectedLocation } = useStore()
-
-  useEffect(() => {
-    fetchDashboardStats()
-  }, [])
-
-  async function fetchDashboardStats() {
-    try {
-      // Fetch from Oracle database
-      const [predictionsRes, precipRes] = await Promise.all([
-        fetch(`${API_URL}/api/v1/oracle/stats/predictions`).catch(() => null),
-        fetch(`${API_URL}/api/v1/oracle/precipitation/latest?days=30`).catch(() => null)
-      ])
-
-      let totalPredictions = 465 // From seeded data
-      let successRate = 87.3
-      let activeWells = 342
-      let areasAtRisk = 23
-
-      if (predictionsRes?.ok) {
-        const data = await predictionsRes.json()
-        totalPredictions = data.total || totalPredictions
-      }
-
-      if (precipRes?.ok) {
-        const data = await precipRes.json()
-        if (data.data?.days_count) {
-          activeWells = data.data.days_count * 10 // Estimate based on data points
-        }
-      }
-
-      setStats({
-        totalPredictions,
-        successRate,
-        activeWells,
-        areasAtRisk
-      })
-    } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error)
-    }
-  }
+  const { selectedLocation, setSelectedLocation } = useStore()
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -74,51 +25,6 @@ export default function DashboardPage() {
         />
         
         <main className="flex-1 overflow-hidden flex flex-col">
-          {/* Quick Stats Bar - Responsive */}
-          <div className="border-b bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-800 px-3 sm:px-6 py-3 sm:py-4 shadow-sm">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-              <div className="flex items-center gap-2 sm:gap-3 bg-white dark:bg-gray-800 rounded-lg p-2 sm:p-3 shadow-sm hover:shadow-md transition-shadow">
-                <div className="rounded-lg bg-blue-500 p-1.5 sm:p-2.5">
-                  <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">Total Predictions</p>
-                  <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{stats.totalPredictions.toLocaleString()}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 sm:gap-3 bg-white dark:bg-gray-800 rounded-lg p-2 sm:p-3 shadow-sm hover:shadow-md transition-shadow">
-                <div className="rounded-lg bg-green-500 p-1.5 sm:p-2.5">
-                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">Success Rate</p>
-                  <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{stats.successRate.toFixed(1)}%</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 sm:gap-3 bg-white dark:bg-gray-800 rounded-lg p-2 sm:p-3 shadow-sm hover:shadow-md transition-shadow">
-                <div className="rounded-lg bg-purple-500 p-1.5 sm:p-2.5">
-                  <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">Data Points</p>
-                  <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{stats.activeWells.toLocaleString()}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 sm:gap-3 bg-white dark:bg-gray-800 rounded-lg p-2 sm:p-3 shadow-sm hover:shadow-md transition-shadow">
-                <div className="rounded-lg bg-yellow-500 p-1.5 sm:p-2.5">
-                  <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">Areas at Risk</p>
-                  <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{stats.areasAtRisk}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Main Content Area */}
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             {/* Map Section */}
