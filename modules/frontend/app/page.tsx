@@ -21,7 +21,7 @@ export default function DashboardPage() {
     activeWells: 0,
     areasAtRisk: 0
   })
-  const { selectedLocation, prediction } = useStore()
+  const { selectedLocation, prediction, setSelectedLocation } = useStore()
 
   useEffect(() => {
     fetchDashboardStats()
@@ -215,6 +215,16 @@ export default function DashboardPage() {
                           <span className="text-xs text-gray-700 dark:text-gray-300">Active infrastructure & historical data</span>
                         </div>
                       </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLocation({ lat: -1.2921, lon: 36.8219 })
+                            setShowWelcome(false)
+                          }}
+                          className="mt-4 w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                        >
+                          Analyze Nairobi demo location
+                        </button>
                     </CardContent>
                   </Card>
                 </div>

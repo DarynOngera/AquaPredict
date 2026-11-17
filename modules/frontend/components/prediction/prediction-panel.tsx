@@ -31,10 +31,12 @@ export function PredictionPanel() {
   const [isLoadingPrecipitation, setIsLoadingPrecipitation] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [selectedModel, setSelectedModel] = useState<string>('random_forest')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handlePredict = async () => {
     if (!selectedLocation) return
 
+    setErrorMessage(null)
     setIsLoadingPrediction(true)
     try {
       const result = await api.predictAquifer(selectedLocation)
@@ -42,7 +44,7 @@ export function PredictionPanel() {
       addToPredictionHistory(result)
     } catch (error) {
       console.error('Prediction failed:', error)
-      // TODO: Show error toast
+      setErrorMessage(error instanceof Error ? error.message : 'Prediction failed. Please try again.')
     } finally {
       setIsLoadingPrediction(false)
     }
@@ -51,13 +53,14 @@ export function PredictionPanel() {
   const handlePrecipitationPredict = async () => {
     if (!selectedLocation) return
 
+    setErrorMessage(null)
     setIsLoadingPrecipitation(true)
     try {
       const result = await api.predictPrecipitation(selectedLocation, selectedDate, selectedModel)
       setPrecipitationResult(result)
     } catch (error) {
       console.error('Precipitation prediction failed:', error)
-      // TODO: Show error toast
+      setErrorMessage(error instanceof Error ? error.message : 'Prediction failed. Please try again.')
     } finally {
       setIsLoadingPrecipitation(false)
     }
@@ -66,13 +69,14 @@ export function PredictionPanel() {
   const handleForecast = async () => {
     if (!selectedLocation) return
 
+    setErrorMessage(null)
     setIsLoadingForecast(true)
     try {
       const result = await api.forecastRecharge(selectedLocation, 12)
       setForecast(result)
     } catch (error) {
       console.error('Forecast failed:', error)
-      // TODO: Show error toast
+      setErrorMessage(error instanceof Error ? error.message : 'Forecast failed. Please try again.')
     } finally {
       setIsLoadingForecast(false)
     }
@@ -106,6 +110,12 @@ export function PredictionPanel() {
           <X className="h-5 w-5" />
         </Button>
       </div>
+
+      {errorMessage && (
+        <div className="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          {errorMessage}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b">
