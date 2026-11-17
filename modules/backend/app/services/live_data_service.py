@@ -19,6 +19,7 @@ class LiveDataService:
         # Open-Meteo API (free, no API key needed)
         self.base_url = "https://api.open-meteo.com/v1/forecast"
         self.archive_url = "https://archive-api.open-meteo.com/v1/archive"
+        self.last_source = "fallback_estimate"
     
     def fetch_current_features(self, lon: float, lat: float) -> Dict[str, float]:
         """
@@ -51,13 +52,16 @@ class LiveDataService:
             
             if response.status_code == 200:
                 data = response.json()
+                self.last_source = "live_open_meteo"
                 return self._parse_features(data)
             else:
                 logger.warning(f"API returned {response.status_code}, using estimates")
+                self.last_source = "fallback_estimate"
                 return self._get_estimated_features(lon, lat)
         
         except Exception as e:
             logger.warning(f"Failed to fetch live data: {e}, using estimates")
+            self.last_source = "fallback_estimate"
             return self._get_estimated_features(lon, lat)
     
     def _parse_features(self, data: dict) -> Dict[str, float]:

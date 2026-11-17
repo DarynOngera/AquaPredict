@@ -115,6 +115,7 @@ tnsnames.ora
 sqlnet.ora
 
 # Terraform
+*.tfvars
 *.tfstate
 *.tfstate.*
 .terraform/

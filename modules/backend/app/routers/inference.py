@@ -43,6 +43,7 @@ class PointPredictionResponse(BaseModel):
     date: str = Field(..., description="Prediction date")
     model: str = Field(..., description="Model used")
     features_extracted: int = Field(..., description="Number of features extracted")
+    data_source: str = Field(..., description="Meteorological input source used for this prediction")
     status: str = Field(..., description="Prediction status")
     timestamp: str = Field(..., description="Prediction timestamp")
 
@@ -167,6 +168,7 @@ async def predict_point(request: PointPredictionRequest):
             date=result['date'],
             model=model_name,
             features_extracted=result['features_used'],
+            data_source=result['data_source'],
             status=result['status'],
             timestamp=datetime.now().isoformat()
         )

@@ -49,6 +49,7 @@ export const api = {
       date: string
       model: string
       features_extracted: number
+      data_source: string
       status: string
       timestamp: string
     }>('/api/inference/predict', {

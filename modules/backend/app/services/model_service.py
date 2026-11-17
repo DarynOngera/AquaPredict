@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,18 @@ class ModelService:
     
     def __init__(self, models_dir: str = None):
         if models_dir is None:
-            # Look for model_artifacts in project root
-            # This file is at: modules/backend/app/services/model_service.py
-            # Project root is 4 levels up: ../../../../
-            models_dir = Path(__file__).parent.parent.parent.parent.parent / "model_artifacts"
+            # Containers and local checkouts have different directory layouts.
+            # Deployment should set MODEL_ARTIFACTS_DIR explicitly; the remaining
+            # candidates keep local development convenient.
+            configured_dir = os.getenv("MODEL_ARTIFACTS_DIR")
+            candidates = [
+                Path(configured_dir) if configured_dir else None,
+                Path("/app/model_artifacts"),
+            ]
+            source_parents = Path(__file__).resolve().parents
+            if len(source_parents) > 4:
+                candidates.append(source_parents[4] / "model_artifacts")
+            models_dir = next((path for path in candidates if path and path.exists()), candidates[0] or candidates[1])
         self.models_dir = Path(models_dir)
         self.models: Dict[str, PrecipitationModel] = {}
         self._load_all_models()

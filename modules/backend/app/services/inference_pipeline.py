@@ -119,7 +119,7 @@ class InferencePipeline:
         try:
             live_service = get_live_data_service()
             features = live_service.fetch_current_features(lon, lat)
-            logger.info(f"Using live data for ({lon:.4f}, {lat:.4f})")
+            logger.info(f"Using {live_service.last_source} for ({lon:.4f}, {lat:.4f})")
             return features
         except Exception as e:
             logger.warning(f"Live data unavailable, using estimates: {e}")
@@ -284,6 +284,7 @@ class InferencePipeline:
                 'location': {'lon': lon, 'lat': lat},
                 'date': date.strftime('%Y-%m-%d'),
                 'features_used': len(self.feature_names),
+                'data_source': get_live_data_service().last_source,
                 'status': 'success'
             }
         

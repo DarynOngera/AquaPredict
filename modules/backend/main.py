@@ -21,10 +21,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(env_path)
-print(f"Loaded .env from: {env_path}")
-print(f"Oracle User: {os.getenv('ORACLE_USER')}")
-print(f"Oracle DSN: {os.getenv('ORACLE_DSN')}")
-print(f"Oracle Password set: {'Yes' if os.getenv('ORACLE_PASSWORD') else 'No'}")
 
 from gee_service import GEEService
 from model_service import ModelService
@@ -57,10 +53,12 @@ app = FastAPI(
 )
 
 # CORS middleware
+cors_origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -210,6 +208,27 @@ async def health_check():
             "export": True
         },
         "data_source": "Oracle Autonomous Database" if oracle_service.is_available() else "Fallback"
+    }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness endpoint used by the demo deployment and container probes."""
+    from app.services.model_service import get_model_service
+
+    model_service = get_model_service()
+    if not model_service.models:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "reason": "No demo model artifacts loaded",
+            },
+        )
+
+    return {
+        "status": "ready",
+        "models": sorted(model_service.models.keys()),
     }
 
 
