@@ -9,6 +9,16 @@ services:
       GEE_PROJECT: ${GEE_PROJECT:-}
       GEE_SERVICE_ACCOUNT: ${GEE_SERVICE_ACCOUNT:-}
       GEE_PRIVATE_KEY_FILE: /app/credentials/gee_key.json
+      # Optional Databricks SQL Warehouse report mirror (disabled by default).
+      DATABRICKS_ENABLED: ${DATABRICKS_ENABLED:-false}
+      DATABRICKS_HOST: ${DATABRICKS_HOST:-}
+      DATABRICKS_WAREHOUSE_ID: ${DATABRICKS_WAREHOUSE_ID:-}
+      DATABRICKS_CATALOG: ${DATABRICKS_CATALOG:-aquapredict}
+      DATABRICKS_SCHEMA: ${DATABRICKS_SCHEMA:-reporting}
+      DATABRICKS_CLIENT_ID: ${DATABRICKS_CLIENT_ID:-}
+      DATABRICKS_CLIENT_SECRET: ${DATABRICKS_CLIENT_SECRET:-}
+      # Legacy alternative. Prefer OAuth M2M credentials above.
+      DATABRICKS_TOKEN: ${DATABRICKS_TOKEN:-}
     volumes:
       - ${GEE_CREDENTIALS_DIR:-./credentials}:/app/credentials:ro
     expose:

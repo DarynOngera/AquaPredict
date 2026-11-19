@@ -27,6 +27,7 @@ from model_service import ModelService
 from settings_service import SettingsService
 from export_service import ExportService
 from simulated_data import SimulatedDataProvider
+from app.services.databricks_service import databricks_service
 
 # Import routers
 from app.routers import inference, oracle, analytics
@@ -232,6 +233,12 @@ async def readiness_check():
     }
 
 
+@app.get("/api/v1/integrations/databricks")
+async def databricks_status():
+    """Return configuration status without exposing Databricks credentials."""
+    return databricks_service.status()
+
+
 # ============================================================================
 # ORACLE AUTONOMOUS DATABASE ENDPOINTS
 # ============================================================================
@@ -270,7 +277,7 @@ async def get_monthly_precipitation(year: Optional[int] = None):
 # ============================================================================
 
 @app.post("/api/v1/predict/aquifer", response_model=PredictionResponse)
-async def predict_aquifer(request: PredictionRequest):
+async def predict_aquifer(request: PredictionRequest, background_tasks: BackgroundTasks):
     """
     Predict aquifer presence at a location using GEE data and ML models.
     Falls back to simulated data if GEE unavailable.
@@ -306,7 +313,7 @@ async def predict_aquifer(request: PredictionRequest):
         # Make prediction
         prediction_result = model_service.predict_aquifer(features)
         
-        return PredictionResponse(
+        response = PredictionResponse(
             location=request.location,
             prediction=prediction_result["prediction"],
             probability=prediction_result["probability"],
@@ -319,6 +326,10 @@ async def predict_aquifer(request: PredictionRequest):
             timestamp=datetime.utcnow().isoformat(),
             features_used=features
         )
+        # The mirror is optional and runs after the API response is prepared.
+        # A Databricks failure cannot change prediction behaviour.
+        background_tasks.add_task(databricks_service.record_prediction, response.dict())
+        return response
     
     except Exception as e:
         logger.error(f"Prediction error: {e}", exc_info=True)
@@ -326,7 +337,7 @@ async def predict_aquifer(request: PredictionRequest):
 
 
 @app.post("/api/v1/predict/recharge", response_model=ForecastResponse)
-async def forecast_recharge(request: ForecastRequest):
+async def forecast_recharge(request: ForecastRequest, background_tasks: BackgroundTasks):
     """
     Forecast groundwater recharge using GEE climate data and LSTM models.
     Falls back to simulated data if GEE unavailable.
@@ -365,13 +376,15 @@ async def forecast_recharge(request: ForecastRequest):
             horizon=request.horizon
         )
         
-        return ForecastResponse(
+        response = ForecastResponse(
             location=request.location,
             forecast=forecast_result["forecast"],
             summary=forecast_result["summary"],
             data_source=data_source,
             timestamp=datetime.utcnow().isoformat()
         )
+        background_tasks.add_task(databricks_service.record_forecast, response.dict())
+        return response
     
     except Exception as e:
         logger.error(f"Forecast error: {e}", exc_info=True)
@@ -455,7 +468,7 @@ async def reset_settings():
 # ============================================================================
 
 @app.post("/api/v1/export")
-async def export_data(request: ExportRequest):
+async def export_data(request: ExportRequest, background_tasks: BackgroundTasks):
     """Export data in various formats."""
     try:
         logger.info(f"Export request: {request.export_type} as {request.format}")
@@ -482,6 +495,9 @@ async def export_data(request: ExportRequest):
         
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported format: {request.format}")
+
+        if request.export_type == "report":
+            background_tasks.add_task(databricks_service.record_report, request.data)
         
         return StreamingResponse(
             io.BytesIO(content.encode() if isinstance(content, str) else content),
