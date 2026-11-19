@@ -129,9 +129,29 @@ function FlyToSelectedLocation() {
 
   useEffect(() => {
     if (selectedLocation) {
-      map.flyTo([selectedLocation.lat, selectedLocation.lon], Math.max(map.getZoom(), 11), { duration: 0.8 })
+      // Selecting a location also opens the prediction panel, changing the map width.
+      // Recalculate dimensions before moving. Leaflet's fly animation scales raster
+      // tiles while zooming, which looks blurry on this data-heavy map.
+      const frame = requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false, pan: false })
+        map.setView([selectedLocation.lat, selectedLocation.lon], Math.max(map.getZoom(), 11), { animate: false })
+      })
+      return () => cancelAnimationFrame(frame)
     }
   }, [map, selectedLocation])
+
+  return null
+}
+
+function MapResizeHandler() {
+  const map = useMap()
+
+  useEffect(() => {
+    const container = map.getContainer()
+    const observer = new ResizeObserver(() => map.invalidateSize({ animate: false, pan: false }))
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [map])
 
   return null
 }
@@ -277,6 +297,7 @@ export default function MapComponent() {
 
         <MapClickHandler />
         <FlyToSelectedLocation />
+        <MapResizeHandler />
 
         {/* Aquifer Zones */}
         {showAquiferZones && kenyaAquiferZones.map((zone, idx) => (
