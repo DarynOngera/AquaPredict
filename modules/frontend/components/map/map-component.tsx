@@ -4,7 +4,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Circle, Polygon, useMap, useMapEvents, LayersControl, GeoJSON } from 'react-leaflet'
 import { Icon, LatLng } from 'leaflet'
 import { useStore } from '@/lib/store'
-import { MapPin, Droplet, AlertTriangle, CheckCircle, Search, XCircle } from 'lucide-react'
+import { MapPin, Droplet, AlertTriangle, CheckCircle, Minus, Plus, Search, XCircle } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 
 // Realistic Kenya aquifer zones (simplified)
@@ -258,8 +258,9 @@ export default function MapComponent() {
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
-        className="h-full w-full"
+        className="dashboard-map h-full w-full"
         ref={mapRef}
+        zoomControl={false}
       >
         {/* Base Layers */}
         {mapLayer === 'street' ? (
@@ -391,6 +392,28 @@ export default function MapComponent() {
       </MapContainer>
 
       <MapSearch />
+
+      {/* Custom zoom controls stay clear of the location search field. */}
+      <div className="absolute left-4 top-24 z-[1000] overflow-hidden rounded-lg border border-blue-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+        <button
+          type="button"
+          onClick={() => mapRef.current?.zoomIn()}
+          className="flex h-10 w-10 items-center justify-center border-b text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-300"
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          <Plus className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+        <button
+          type="button"
+          onClick={() => mapRef.current?.zoomOut()}
+          className="flex h-10 w-10 items-center justify-center text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-300"
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          <Minus className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+      </div>
 
       {/* Layer Controls */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">

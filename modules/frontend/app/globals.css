@@ -83,6 +83,11 @@
   font-family: inherit;
 }
 
+/* The dashboard provides its own accessible zoom control, positioned below search. */
+.dashboard-map .leaflet-control-zoom {
+  display: none;
+}
+
 .leaflet-popup-content-wrapper {
   @apply rounded-lg shadow-lg;
 }
