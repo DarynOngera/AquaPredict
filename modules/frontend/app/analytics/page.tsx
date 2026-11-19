@@ -1,539 +1,204 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { CloudRain, Droplets, MapPin, RefreshCw, ThermometerSun, Wind } from 'lucide-react'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+
 import { Header } from '@/components/layout/header'
 import { Sidebar } from '@/components/layout/sidebar'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { OracleStatusIndicator } from '@/components/oracle-status-indicator'
-import { 
-  BarChart3, 
-  TrendingUp, 
-  MapPin, 
-  Droplets,
-  Calendar,
-  Download
-} from 'lucide-react'
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Area,
-  AreaChart
-} from 'recharts'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
+const LOCATIONS = [
+  { name: 'Nairobi', latitude: -1.286389, longitude: 36.817223 },
+  { name: 'Mombasa', latitude: -4.043477, longitude: 39.668206 },
+  { name: 'Kisumu', latitude: -0.10221, longitude: 34.76171 },
+  { name: 'Eldoret', latitude: 0.514277, longitude: 35.26978 },
+]
+
+const RANGES = [
+  { label: '1m', days: 30 },
+  { label: '3m', days: 90 },
+  { label: '6m', days: 180 },
+  { label: '1y', days: 365 },
+]
+
+type WeatherDay = {
+  date: string
+  temperature_max: number | null
+  temperature_min: number | null
+  temperature_mean: number | null
+  precipitation: number | null
+  precipitation_hours: number | null
+  wind_speed_max: number | null
+  et0: number | null
+  weather_code: number | null
+}
+
+type WeatherAnalytics = {
+  status: string
+  data_source: string
+  location: { latitude: number; longitude: number; timezone: string }
+  current: {
+    temperature_2m?: number
+    relative_humidity_2m?: number
+    precipitation?: number
+    wind_speed_10m?: number
+  }
+  summary: {
+    days: number
+    total_precipitation: number
+    average_temperature: number | null
+    rainy_days: number
+    max_wind_speed: number | null
+    total_et0: number
+  }
+  daily: WeatherDay[]
+}
+
+function chartDate(date: string, days: number) {
+  const parsed = new Date(`${date}T00:00:00`)
+  return parsed.toLocaleDateString(undefined, days > 90 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })
+}
+
+function displayNumber(value: number | null | undefined, suffix = '') {
+  return value === null || value === undefined ? '—' : `${value.toFixed(1)}${suffix}`
+}
+
 export default function AnalyticsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [timeRange, setTimeRange] = useState('6m')
+  const [selectedLocation, setSelectedLocation] = useState(LOCATIONS[0])
+  const [days, setDays] = useState(30)
+  const [data, setData] = useState<WeatherAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({
-    totalPredictions: 0,
-    aquifersFound: 0,
-    avgConfidence: 0,
-    forecastAccuracy: 0
-  })
-  const [monthlyData, setMonthlyData] = useState<any[]>([])
-  const [modelData, setModelData] = useState<any[]>([])
-  const [confidenceDistribution, setConfidenceDistribution] = useState<any[]>([
-    { range: '0-20%', count: 0 },
-    { range: '20-40%', count: 0 },
-    { range: '40-60%', count: 0 },
-    { range: '60-80%', count: 0 },
-    { range: '80-100%', count: 0 },
-  ])
-  const [regionData, setRegionData] = useState<any[]>([
-    { name: 'Nairobi', value: 0, color: '#1890ff' },
-    { name: 'Mombasa', value: 0, color: '#52c41a' },
-    { name: 'Kisumu', value: 0, color: '#faad14' },
-    { name: 'Nyeri', value: 0, color: '#f5222d' },
-    { name: 'Eldoret', value: 0, color: '#722ed1' },
-  ])
-  const [rechargeData, setRechargeData] = useState<any[]>([])
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchAnalyticsData()
-  }, [timeRange])
+  const activeRange = RANGES.find((range) => range.days === days)?.label
 
-  async function fetchAnalyticsData() {
+  async function loadAnalytics() {
     setLoading(true)
+    setError(null)
     try {
-      // Use single optimized endpoint
-      const response = await fetch(`${API_URL}/api/v1/analytics/dashboard-summary`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch analytics data')
-      }
-      
-      const data = await response.json()
-      
-      if (data.status !== 'success') {
-        console.warn('Analytics data not available:', data.message)
-        setLoading(false)
-        return
-      }
-      
-      // Set summary stats
-      const summary = data.summary
-      setStats({
-        totalPredictions: summary.predictions,
-        aquifersFound: Math.floor(summary.predictions * 0.68),
-        avgConfidence: summary.avg_confidence * 100,
-        forecastAccuracy: 92.1
+      const params = new URLSearchParams({
+        latitude: String(selectedLocation.latitude),
+        longitude: String(selectedLocation.longitude),
+        days: String(days),
       })
-      
-      // Update confidence distribution
-      setConfidenceDistribution([
-        { range: '0-20%', count: Math.floor(summary.predictions * 0.02) },
-        { range: '20-40%', count: Math.floor(summary.predictions * 0.04) },
-        { range: '40-60%', count: Math.floor(summary.predictions * 0.08) },
-        { range: '60-80%', count: Math.floor(summary.predictions * 0.28) },
-        { range: '80-100%', count: Math.floor(summary.predictions * 0.58) },
-      ])
-      
-      // Format monthly data for charts
-      const formatted = data.monthly_precipitation.map((item: any) => {
-        const monthName = new Date(item.year, item.month - 1, 1)
-          .toLocaleString('default', { month: 'short' }) + ' ' + item.year.toString().slice(-2)
-        
-        return {
-          month: `${item.year}-${String(item.month).padStart(2, '0')}`,
-          monthName: monthName,
-          predictions: item.days_count,
-          aquifers: Math.floor(item.days_count * 0.7),
-          precip: parseFloat(item.avg_precip.toFixed(2)),
-          maxPrecip: parseFloat(item.max_precip.toFixed(2)),
-          totalPrecip: parseFloat(item.total_precip.toFixed(2))
-        }
-      })
-      setMonthlyData(formatted)
-      
-      // Create recharge data
-      const recharge = formatted.map((item: any) => ({
-        month: item.monthName,
-        actual: item.precip,
-        forecast: parseFloat((item.precip * 0.95).toFixed(2)),
-        maxPrecip: item.maxPrecip
-      }))
-      setRechargeData(recharge)
-      
-      // Set location data
-      if (data.locations && data.locations.length > 0) {
-        const colors = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1']
-        setRegionData(data.locations.map((loc: any, idx: number) => ({
-          name: loc.name,
-          value: loc.count,
-          color: colors[idx % colors.length]
-        })))
+      const response = await fetch(`${API_URL}/api/v1/analytics/weather?${params}`)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload || payload.status !== 'success') {
+        throw new Error(payload?.detail || 'Unable to load weather analytics')
       }
-      
-      // Set model data
-      setModelData(data.models || [])
-      
-    } catch (error) {
-      console.error('Failed to fetch analytics:', error)
+      setData(payload)
+    } catch (requestError) {
+      setData(null)
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load weather analytics')
     } finally {
       setLoading(false)
     }
   }
 
+  useEffect(() => {
+    void loadAnalytics()
+  }, [selectedLocation, days])
+
+  const chartData = useMemo(() => (data?.daily ?? []).map((day) => ({
+    ...day,
+    label: chartDate(day.date, days),
+    precipitation: day.precipitation ?? 0,
+    et0: day.et0 ?? 0,
+  })), [data, days])
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-      
       <div className="flex flex-1 overflow-hidden">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        
         <main className="flex-1 overflow-y-auto">
-          <OracleStatusIndicator />
-          <div className="container mx-auto p-6 space-y-6">
-            {/* Page Header */}
-            <div className="flex items-center justify-between">
+          <div className="container mx-auto space-y-6 p-6">
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
-                  <Badge className="bg-blue-600 text-white">
-                    <Droplets className="h-3 w-3 mr-1" />
-                    Oracle ATP Live Data
-                  </Badge>
+                <div className="mb-2 flex items-center gap-3">
+                  <h1 className="text-3xl font-bold">Weather Analytics</h1>
+                  <Badge className="bg-sky-600 text-white">Open-Meteo live data</Badge>
                 </div>
-                <p className="text-muted-foreground mt-1">
-                  Real-time insights from Oracle Autonomous Database • 1,886 CHIRPS records • 455 weather observations • 465 predictions
+                <p className="text-muted-foreground">
+                  Observed and current weather conditions for groundwater planning.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 rounded-lg border bg-card p-1">
-                  {['1m', '3m', '6m', '1y'].map((range) => (
-                    <Button
-                      key={range}
-                      variant={timeRange === range ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => setTimeRange(range)}
-                    >
-                      {range}
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="sr-only" htmlFor="analytics-location">Location</label>
+                <select
+                  id="analytics-location"
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                  value={selectedLocation.name}
+                  onChange={(event) => setSelectedLocation(LOCATIONS.find((location) => location.name === event.target.value) ?? LOCATIONS[0])}
+                >
+                  {LOCATIONS.map((location) => <option key={location.name}>{location.name}</option>)}
+                </select>
+                <div className="flex items-center rounded-lg border bg-card p-1">
+                  {RANGES.map((range) => (
+                    <Button key={range.days} variant={activeRange === range.label ? 'default' : 'ghost'} size="sm" onClick={() => setDays(range.days)}>
+                      {range.label}
                     </Button>
                   ))}
                 </div>
-                <Button>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Report
+                <Button variant="outline" size="sm" onClick={() => void loadAnalytics()} disabled={loading}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
                 </Button>
               </div>
             </div>
 
-            {/* Oracle ATP Data Summary Banner */}
-            <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-2 border-blue-200 dark:border-blue-800">
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Droplets className="h-6 w-6 text-blue-600" />
-                      <h3 className="text-lg font-bold">Oracle Autonomous Database - Live Data</h3>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">CHIRPS Precipitation</p>
-                        <p className="text-xl font-bold text-blue-600">1,886 records</p>
-                        <p className="text-xs text-muted-foreground">May 2020 - June 2025</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Weather Observations</p>
-                        <p className="text-xl font-bold text-green-600">455 records</p>
-                        <p className="text-xs text-muted-foreground">5 Kenya locations, 90 days</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Model Predictions</p>
-                        <p className="text-xl font-bold text-purple-600">{stats.totalPredictions || 465} records</p>
-                        <p className="text-xs text-muted-foreground">3 models, 30 days</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">ML Models</p>
-                        <p className="text-xl font-bold text-orange-600">{modelData.length || 3} active</p>
-                        <p className="text-xs text-muted-foreground">XGBoost, RF, Linear</p>
-                      </div>
-                    </div>
-                  </div>
-                  <Badge className="bg-blue-600 text-white text-sm px-3 py-1">
-                    🔴 LIVE
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Total Predictions
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">Oracle ATP</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{loading ? '...' : stats.totalPredictions.toLocaleString()}</div>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    📊 PREDICTIONS table
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Weather Observations
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">Oracle ATP</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">455</div>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    📊 RAW_WEATHER_DATA table
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      CHIRPS Records
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">Oracle ATP</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">1,886</div>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    📊 CHIRPS_PRECIP_EXPORT (2020-2025)
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Active Models
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">Oracle ATP</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{modelData.length || 3}</div>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    📊 MODEL_METADATA table
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Row 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Monthly Predictions */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <CardTitle>Monthly Precipitation Trends</CardTitle>
-                      <CardDescription>
-                        Average daily precipitation by month from CHIRPS data (2020-2025)
-                      </CardDescription>
-                    </div>
-                    <Badge className="bg-blue-600 text-white">Oracle ATP</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    📊 Source: CHIRPS_PRECIP_EXPORT • {monthlyData.length} months • Last updated: {new Date().toLocaleDateString()}
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyData.length > 0 ? monthlyData : [{monthName: 'Loading', predictions: 0, aquifers: 0}]}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="monthName" className="text-xs" />
-                        <YAxis className="text-xs" />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '0.5rem',
-                          }}
-                        />
-                        <Legend />
-                        <Bar dataKey="precip" fill="#1890ff" name="Avg Precipitation (mm)" />
-                        <Bar dataKey="maxPrecip" fill="#52c41a" name="Max Precipitation (mm)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Confidence Distribution */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <CardTitle>Prediction Confidence Distribution</CardTitle>
-                      <CardDescription>
-                        Distribution of {stats.totalPredictions} predictions by confidence level
-                      </CardDescription>
-                    </div>
-                    <Badge className="bg-blue-600 text-white">Oracle ATP</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    📊 Source: PREDICTIONS table • 3 models (XGBoost, Random Forest, Linear Regression)
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={confidenceDistribution}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="range" className="text-xs" />
-                        <YAxis className="text-xs" />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '0.5rem',
-                          }}
-                        />
-                        <Bar dataKey="count" fill="#1890ff" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Row 2 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Regional Distribution */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <CardTitle>Weather Data by Location</CardTitle>
-                      <CardDescription>
-                        Distribution of 455 weather observations across 5 Kenya locations
-                      </CardDescription>
-                    </div>
-                    <Badge className="bg-blue-600 text-white">Oracle ATP</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    📊 Source: RAW_WEATHER_DATA • Last 90 days • 5 locations
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={regionData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {regionData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Forecast Accuracy */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <CardTitle>Precipitation Trends (Last 12 Months)</CardTitle>
-                      <CardDescription>
-                        Monthly precipitation patterns from historical data
-                      </CardDescription>
-                    </div>
-                    <Badge className="bg-blue-600 text-white">Oracle ATP</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    📊 Source: CHIRPS_PRECIP_EXPORT • Aggregated by month • 2020-2025 data
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={rechargeData}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="month" className="text-xs" />
-                        <YAxis className="text-xs" />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '0.5rem',
-                          }}
-                        />
-                        <Legend />
-                        <Line 
-                          type="monotone" 
-                          dataKey="actual" 
-                          stroke="#52c41a" 
-                          strokeWidth={2}
-                          name="Actual"
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="forecast" 
-                          stroke="#1890ff" 
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                          name="Forecast"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Model Performance */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between mb-2">
+            <Card className="border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 dark:border-sky-900 dark:from-sky-950 dark:to-cyan-950">
+              <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-6 w-6 text-sky-700" />
                   <div>
-                    <CardTitle>Model Performance Metrics</CardTitle>
-                    <CardDescription>
-                      Detailed performance indicators for ML models from Oracle ATP
-                    </CardDescription>
+                    <p className="font-semibold">{selectedLocation.name}, Kenya</p>
+                    <p className="text-sm text-muted-foreground">
+                      {data ? `${data.location.latitude.toFixed(3)}, ${data.location.longitude.toFixed(3)} · ${data.location.timezone}` : 'Loading location data…'}
+                    </p>
                   </div>
-                  <Badge className="bg-blue-600 text-white">Oracle ATP</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  📊 Source: MODEL_METADATA table • 3 active models • Trained on 10,000 samples each
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {modelData.map((model, idx) => (
-                    <div key={idx} className="space-y-2">
-                      <h4 className="font-semibold text-sm">{model.name}</h4>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Accuracy</span>
-                          <span className="font-medium">{(model.accuracy * 100).toFixed(1)}%</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">MAE</span>
-                          <span className="font-medium">{model.mae.toFixed(2)} mm</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">RMSE</span>
-                          <span className="font-medium">{model.rmse.toFixed(2)} mm</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">R²</span>
-                          <span className="font-medium">{model.r2_score.toFixed(3)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Samples</span>
-                          <span className="font-medium">{model.training_samples.toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {modelData.length === 0 && (
-                    <div className="col-span-3 text-center text-muted-foreground py-8">
-                      Loading model data...
-                    </div>
-                  )}
-                </div>
+                <p className="text-sm text-muted-foreground">Source: Open-Meteo Weather Forecast API</p>
               </CardContent>
             </Card>
+
+            {error && <Card className="border-destructive"><CardContent className="pt-6 text-sm text-destructive">{error}. Try refreshing in a moment.</CardContent></Card>}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard icon={<CloudRain className="h-5 w-5 text-sky-600" />} label={`Rainfall · ${data?.summary.days ?? days} days`} value={loading ? '…' : displayNumber(data?.summary.total_precipitation, ' mm')} hint={`${data?.summary.rainy_days ?? 0} rainy days`} />
+              <MetricCard icon={<ThermometerSun className="h-5 w-5 text-orange-500" />} label="Average temperature" value={loading ? '…' : displayNumber(data?.summary.average_temperature, ' °C')} hint={`Current: ${displayNumber(data?.current.temperature_2m, ' °C')}`} />
+              <MetricCard icon={<Wind className="h-5 w-5 text-slate-600" />} label="Maximum wind" value={loading ? '…' : displayNumber(data?.summary.max_wind_speed, ' km/h')} hint={`Current: ${displayNumber(data?.current.wind_speed_10m, ' km/h')}`} />
+              <MetricCard icon={<Droplets className="h-5 w-5 text-cyan-600" />} label="Reference ET₀" value={loading ? '…' : displayNumber(data?.summary.total_et0, ' mm')} hint="Reference evapotranspiration" />
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <ChartCard title="Daily precipitation" description="Total precipitation recorded or forecast for each day.">
+                <BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" minTickGap={28} /><YAxis unit=" mm" /><Tooltip /><Bar dataKey="precipitation" name="Precipitation" fill="#0284c7" radius={[3, 3, 0, 0]} /></BarChart>
+              </ChartCard>
+              <ChartCard title="Temperature range" description="Daily minimum, mean, and maximum air temperature at 2 m.">
+                <LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" minTickGap={28} /><YAxis unit=" °C" /><Tooltip /><Legend /><Line type="monotone" dataKey="temperature_min" name="Minimum" stroke="#38bdf8" dot={false} /><Line type="monotone" dataKey="temperature_mean" name="Mean" stroke="#f59e0b" dot={false} /><Line type="monotone" dataKey="temperature_max" name="Maximum" stroke="#ef4444" dot={false} /></LineChart>
+              </ChartCard>
+            </div>
+
+            <ChartCard title="Precipitation and reference evapotranspiration" description="ET₀ is a climatic water-demand indicator, not measured groundwater recharge.">
+              <AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" minTickGap={28} /><YAxis unit=" mm" /><Tooltip /><Legend /><Area type="monotone" dataKey="precipitation" name="Precipitation" stroke="#0284c7" fill="#7dd3fc" fillOpacity={0.7} /><Area type="monotone" dataKey="et0" name="Reference ET₀" stroke="#d97706" fill="#fcd34d" fillOpacity={0.55} /></AreaChart>
+            </ChartCard>
           </div>
         </main>
       </div>
     </div>
   )
+}
+
+function MetricCard({ icon, label, value, hint }: { icon: ReactNode; label: string; value: string; hint: string }) {
+  return <Card><CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>{icon}</div></CardHeader><CardContent><p className="text-3xl font-bold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{hint}</p></CardContent></Card>
+}
+
+function ChartCard({ title, description, children }: { title: string; description: string; children: ReactElement }) {
+  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent><div className="h-80"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div></CardContent></Card>
 }
