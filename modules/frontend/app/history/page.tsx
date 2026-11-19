@@ -1,275 +1,92 @@
 'use client'
 
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
+import { Calendar, Download, Droplets, History as HistoryIcon, MapPin, Trash2, TrendingUp } from 'lucide-react'
+
 import { Header } from '@/components/layout/header'
 import { Sidebar } from '@/components/layout/sidebar'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { 
-  History as HistoryIcon, 
-  MapPin, 
-  Calendar,
-  Droplets,
-  TrendingUp,
-  Trash2,
-  Eye,
-  Download
-} from 'lucide-react'
-import { formatCoordinate, formatProbability, getPredictionBadgeColor, formatDate } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { api } from '@/lib/api'
+import { useStore } from '@/lib/store'
+import { formatCoordinate, formatDate, formatProbability, getPredictionBadgeColor } from '@/lib/utils'
 
-// Sample history data
-const predictionHistory = [
-  {
-    id: 1,
-    location: { lat: -1.2921, lon: 36.8219 },
-    prediction: 'present',
-    probability: 0.89,
-    timestamp: '2024-01-15T14:30:00Z',
-    type: 'aquifer',
-  },
-  {
-    id: 2,
-    location: { lat: -0.0917, lon: 34.7680 },
-    prediction: 'absent',
-    probability: 0.34,
-    timestamp: '2024-01-15T13:45:00Z',
-    type: 'aquifer',
-  },
-  {
-    id: 3,
-    location: { lat: 0.5143, lon: 35.2698 },
-    prediction: 'present',
-    probability: 0.92,
-    timestamp: '2024-01-15T12:20:00Z',
-    type: 'aquifer',
-  },
-  {
-    id: 4,
-    location: { lat: -3.2192, lon: 40.1169 },
-    prediction: 'present',
-    probability: 0.76,
-    timestamp: '2024-01-15T11:10:00Z',
-    type: 'aquifer',
-  },
-  {
-    id: 5,
-    location: { lat: 1.4419, lon: 38.5619 },
-    prediction: 'absent',
-    probability: 0.28,
-    timestamp: '2024-01-15T10:05:00Z',
-    type: 'aquifer',
-  },
-]
-
-const forecastHistory = [
-  {
-    id: 1,
-    location: { lat: -1.2921, lon: 36.8219 },
-    horizon: 12,
-    avgRecharge: 45.3,
-    timestamp: '2024-01-15T14:00:00Z',
-    type: 'forecast',
-  },
-  {
-    id: 2,
-    location: { lat: 0.5143, lon: 35.2698 },
-    horizon: 12,
-    avgRecharge: 52.1,
-    timestamp: '2024-01-15T11:30:00Z',
-    type: 'forecast',
-  },
-]
+function download(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 export default function HistoryPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeTab, setActiveTab] = useState<'predictions' | 'forecasts'>('predictions')
+  const [exporting, setExporting] = useState(false)
+  const {
+    predictionHistory,
+    forecastHistory,
+    clearHistory,
+    removePredictionHistory,
+    removeForecastHistory,
+  } = useStore()
+
+  const uniqueLocations = new Set([...predictionHistory, ...forecastHistory].map((item) => `${item.location.lat},${item.location.lon}`)).size
+
+  const exportHistory = async () => {
+    setExporting(true)
+    try {
+      const blob = await api.exportData('history', 'csv', { history: predictionHistory })
+      download(blob, `aquapredict-history-${new Date().toISOString().slice(0, 10)}.csv`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <Header onMenuClick={() => setSidebarOpen((open) => !open)} />
-      
       <div className="flex flex-1 overflow-hidden">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen((open) => !open)} />
-        
         <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto p-6 space-y-6">
-            {/* Page Header */}
-            <div className="flex items-center justify-between">
+          <div className="container mx-auto space-y-6 p-6">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div>
                 <h1 className="text-3xl font-bold">Prediction History</h1>
-                <p className="text-muted-foreground mt-1">
-                  View and manage your past predictions and forecasts
-                </p>
+                <p className="mt-1 text-muted-foreground">Real analyses created in this browser are retained for the demo.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export History
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => void exportHistory()} disabled={exporting || predictionHistory.length === 0}>
+                  <Download className="mr-2 h-4 w-4" />{exporting ? 'Exporting…' : 'Export CSV'}
                 </Button>
-                <Button variant="destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Clear All
+                <Button variant="destructive" onClick={clearHistory} disabled={predictionHistory.length + forecastHistory.length === 0}>
+                  <Trash2 className="mr-2 h-4 w-4" />Clear history
                 </Button>
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Predictions</p>
-                      <p className="text-2xl font-bold mt-1">{predictionHistory.length}</p>
-                    </div>
-                    <Droplets className="h-8 w-8 text-aqua-600 dark:text-aqua-400" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Forecasts</p>
-                      <p className="text-2xl font-bold mt-1">{forecastHistory.length}</p>
-                    </div>
-                    <TrendingUp className="h-8 w-8 text-green-600 dark:text-green-400" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Locations Analyzed</p>
-                      <p className="text-2xl font-bold mt-1">
-                        {new Set([...predictionHistory, ...forecastHistory].map(h => `${h.location.lat},${h.location.lon}`)).size}
-                      </p>
-                    </div>
-                    <MapPin className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Metric label="Aquifer predictions" value={predictionHistory.length} icon={<Droplets className="h-8 w-8 text-aqua-600" />} />
+              <Metric label="Recharge forecasts" value={forecastHistory.length} icon={<TrendingUp className="h-8 w-8 text-green-600" />} />
+              <Metric label="Locations analysed" value={uniqueLocations} icon={<MapPin className="h-8 w-8 text-purple-600" />} />
             </div>
 
-            {/* Tabs */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-4 border-b -mb-6">
-                  <button
-                    onClick={() => setActiveTab('predictions')}
-                    className={`pb-4 px-1 font-medium transition-colors border-b-2 ${
-                      activeTab === 'predictions'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Aquifer Predictions ({predictionHistory.length})
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('forecasts')}
-                    className={`pb-4 px-1 font-medium transition-colors border-b-2 ${
-                      activeTab === 'forecasts'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Recharge Forecasts ({forecastHistory.length})
-                  </button>
+                <div className="flex gap-5 border-b">
+                  <button className={`border-b-2 pb-3 text-sm font-medium ${activeTab === 'predictions' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`} onClick={() => setActiveTab('predictions')}>Aquifer predictions ({predictionHistory.length})</button>
+                  <button className={`border-b-2 pb-3 text-sm font-medium ${activeTab === 'forecasts' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`} onClick={() => setActiveTab('forecasts')}>Recharge forecasts ({forecastHistory.length})</button>
                 </div>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent>
                 {activeTab === 'predictions' ? (
-                  <div className="space-y-3">
-                    {predictionHistory.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-aqua-500 to-aqua-700 flex items-center justify-center">
-                            <Droplets className="h-5 w-5 text-white" />
-                          </div>
-                          
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium">
-                                {formatCoordinate(item.location.lat, 'lat')}, {formatCoordinate(item.location.lon, 'lon')}
-                              </span>
-                              <Badge className={getPredictionBadgeColor(item.prediction)}>
-                                {item.prediction}
-                              </Badge>
-                            </div>
-                            
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span>Confidence: {formatProbability(item.probability)}</span>
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {formatDate(item.timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-1" />
-                            View
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  predictionHistory.length === 0 ? <EmptyState message="Run an aquifer prediction from the map to create your first history record." /> :
+                    <div className="space-y-3">{predictionHistory.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 rounded-lg border p-4"><div className="flex items-center gap-3"><div className="rounded-full bg-aqua-600 p-2.5"><Droplets className="h-5 w-5 text-white" /></div><div><div className="mb-1 flex flex-wrap items-center gap-2"><span className="font-medium">{formatCoordinate(item.location.lat, 'lat')}, {formatCoordinate(item.location.lon, 'lon')}</span><Badge className={getPredictionBadgeColor(item.prediction)}>{item.prediction}</Badge></div><p className="text-sm text-muted-foreground">Confidence {formatProbability(item.probability)} · <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(item.timestamp)}</span></p></div></div><Button variant="ghost" size="icon" aria-label="Remove prediction" onClick={() => removePredictionHistory(item.id)}><Trash2 className="h-4 w-4" /></Button></div>)}</div>
                 ) : (
-                  <div className="space-y-3">
-                    {forecastHistory.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center">
-                            <TrendingUp className="h-5 w-5 text-white" />
-                          </div>
-                          
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium">
-                                {formatCoordinate(item.location.lat, 'lat')}, {formatCoordinate(item.location.lon, 'lon')}
-                              </span>
-                              <Badge variant="secondary">
-                                {item.horizon} months
-                              </Badge>
-                            </div>
-                            
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span>Avg Recharge: {item.avgRecharge.toFixed(1)} mm</span>
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {formatDate(item.timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-1" />
-                            View
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  forecastHistory.length === 0 ? <EmptyState message="Generate a recharge forecast from the map to create your first history record." /> :
+                    <div className="space-y-3">{forecastHistory.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 rounded-lg border p-4"><div className="flex items-center gap-3"><div className="rounded-full bg-green-600 p-2.5"><TrendingUp className="h-5 w-5 text-white" /></div><div><div className="mb-1 flex flex-wrap items-center gap-2"><span className="font-medium">{formatCoordinate(item.location.lat, 'lat')}, {formatCoordinate(item.location.lon, 'lon')}</span><Badge variant="secondary">{item.forecast.length} months</Badge></div><p className="text-sm text-muted-foreground"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(item.timestamp)}</span></p></div></div><Button variant="ghost" size="icon" aria-label="Remove forecast" onClick={() => removeForecastHistory(item.id)}><Trash2 className="h-4 w-4" /></Button></div>)}</div>
                 )}
               </CardContent>
             </Card>
@@ -278,4 +95,12 @@ export default function HistoryPage() {
       </div>
     </div>
   )
+}
+
+function Metric({ label, value, icon }: { label: string; value: number; icon: ReactNode }) {
+  return <Card><CardContent className="flex items-center justify-between pt-6"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>{icon}</CardContent></Card>
+}
+
+function EmptyState({ message }: { message: string }) {
+  return <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><HistoryIcon className="h-8 w-8" /><p>{message}</p></div>
 }

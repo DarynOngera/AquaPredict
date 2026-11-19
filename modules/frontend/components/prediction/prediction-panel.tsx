@@ -24,6 +24,7 @@ export function PredictionPanel() {
     isLoadingForecast,
     setIsLoadingForecast,
     addToPredictionHistory,
+    addToForecastHistory,
   } = useStore()
 
   const [activeTab, setActiveTab] = useState<'prediction' | 'precipitation' | 'forecast'>('prediction')
@@ -74,6 +75,7 @@ export function PredictionPanel() {
     try {
       const result = await api.forecastRecharge(selectedLocation, 12)
       setForecast(result)
+      addToForecastHistory(result)
     } catch (error) {
       console.error('Forecast failed:', error)
       setErrorMessage(error instanceof Error ? error.message : 'Forecast failed. Please try again.')
