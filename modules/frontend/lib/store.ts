@@ -45,6 +45,8 @@ export interface GeneratedReport {
 interface AppState {
   selectedLocation: Location | null
   setSelectedLocation: (location: Location | null) => void
+  searchTarget: Location | null
+  setSearchTarget: (location: Location | null) => void
 
   prediction: Prediction | null
   setPrediction: (prediction: Prediction | null) => void
@@ -81,6 +83,8 @@ export const useStore = create<AppState>()(
     (set) => ({
       selectedLocation: null,
       setSelectedLocation: (location) => set({ selectedLocation: location }),
+      searchTarget: null,
+      setSearchTarget: (location) => set({ searchTarget: location }),
 
       prediction: null,
       setPrediction: (prediction) => set({ prediction }),

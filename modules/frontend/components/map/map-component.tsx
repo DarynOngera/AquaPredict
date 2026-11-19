@@ -123,22 +123,21 @@ function MapClickHandler() {
   return null
 }
 
-function FlyToSelectedLocation() {
+function FlyToSearchTarget() {
   const map = useMap()
-  const selectedLocation = useStore((state) => state.selectedLocation)
+  const searchTarget = useStore((state) => state.searchTarget)
 
   useEffect(() => {
-    if (selectedLocation) {
-      // Selecting a location also opens the prediction panel, changing the map width.
-      // Recalculate dimensions before moving. Leaflet's fly animation scales raster
-      // tiles while zooming, which looks blurry on this data-heavy map.
+    if (searchTarget) {
+      // Search is the only selection path that recenters and zooms. Map clicks
+      // leave the current viewport untouched while opening the prediction panel.
       const frame = requestAnimationFrame(() => {
         map.invalidateSize({ animate: false, pan: false })
-        map.setView([selectedLocation.lat, selectedLocation.lon], Math.max(map.getZoom(), 11), { animate: false })
+        map.setView([searchTarget.lat, searchTarget.lon], Math.max(map.getZoom(), 11), { animate: false })
       })
       return () => cancelAnimationFrame(frame)
     }
-  }, [map, selectedLocation])
+  }, [map, searchTarget])
 
   return null
 }
@@ -176,14 +175,16 @@ function parseCoordinates(query: string) {
 }
 
 function MapSearch() {
-  const { setSelectedLocation } = useStore()
+  const { setSelectedLocation, setSearchTarget } = useStore()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const selectLocation = (lat: number, lon: number) => {
-    setSelectedLocation({ lat, lon })
+    const location = { lat, lon }
+    setSelectedLocation(location)
+    setSearchTarget(location)
     setQuery(`${lat.toFixed(5)}, ${lon.toFixed(5)}`)
     setResults([])
     setMessage(null)
@@ -296,7 +297,7 @@ export default function MapComponent() {
         )}
 
         <MapClickHandler />
-        <FlyToSelectedLocation />
+        <FlyToSearchTarget />
         <MapResizeHandler />
 
         {/* Aquifer Zones */}
