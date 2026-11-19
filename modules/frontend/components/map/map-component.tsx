@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polygon, useMapEvents, LayersControl, GeoJSON } from 'react-leaflet'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polygon, useMap, useMapEvents, LayersControl, GeoJSON } from 'react-leaflet'
 import { Icon, LatLng } from 'leaflet'
 import { useStore } from '@/lib/store'
-import { MapPin, Droplet, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
+import { MapPin, Droplet, AlertTriangle, CheckCircle, Search, XCircle } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 
 // Realistic Kenya aquifer zones (simplified)
@@ -123,6 +123,118 @@ function MapClickHandler() {
   return null
 }
 
+function FlyToSelectedLocation() {
+  const map = useMap()
+  const selectedLocation = useStore((state) => state.selectedLocation)
+
+  useEffect(() => {
+    if (selectedLocation) {
+      map.flyTo([selectedLocation.lat, selectedLocation.lon], Math.max(map.getZoom(), 11), { duration: 0.8 })
+    }
+  }, [map, selectedLocation])
+
+  return null
+}
+
+type SearchResult = {
+  name: string
+  latitude: number
+  longitude: number
+  country?: string
+  admin1?: string
+}
+
+function parseCoordinates(query: string) {
+  const match = query.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/)
+  if (!match) return null
+
+  const lat = Number(match[1])
+  const lon = Number(match[2])
+  return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+    ? { lat, lon }
+    : null
+}
+
+function MapSearch() {
+  const { setSelectedLocation } = useStore()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  const selectLocation = (lat: number, lon: number) => {
+    setSelectedLocation({ lat, lon })
+    setQuery(`${lat.toFixed(5)}, ${lon.toFixed(5)}`)
+    setResults([])
+    setMessage(null)
+  }
+
+  const search = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const coordinates = parseCoordinates(query)
+    if (coordinates) {
+      selectLocation(coordinates.lat, coordinates.lon)
+      return
+    }
+    if (query.trim().length < 2) {
+      setMessage('Enter at least two characters, or coordinates as latitude, longitude.')
+      return
+    }
+
+    setLoading(true)
+    setMessage(null)
+    try {
+      const response = await fetch(`/api/v1/analytics/locations?name=${encodeURIComponent(query.trim())}`)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload || payload.status !== 'success') {
+        throw new Error(payload?.detail || 'Location search is unavailable')
+      }
+      setResults(payload.results)
+      if (payload.results.length === 0) setMessage('No locations found. Try including a county or country.')
+    } catch (error) {
+      setResults([])
+      setMessage(error instanceof Error ? error.message : 'Location search is unavailable')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="absolute left-4 top-4 z-[1000] w-[min(22rem,calc(100%-2rem))]">
+      <form onSubmit={search} className="flex rounded-lg border bg-white/95 p-1 shadow-lg backdrop-blur-md dark:bg-gray-900/95">
+        <label className="sr-only" htmlFor="map-location-search">Search location or coordinates</label>
+        <input
+          id="map-location-search"
+          value={query}
+          onChange={(event) => { setQuery(event.target.value); setResults([]); setMessage(null) }}
+          placeholder="Search place or -1.286, 36.817"
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none"
+          autoComplete="off"
+        />
+        <button type="submit" className="rounded-md bg-blue-600 px-3 text-white hover:bg-blue-700 disabled:opacity-60" disabled={loading} aria-label="Search map">
+          <Search className="h-4 w-4" />
+        </button>
+      </form>
+      {(message || results.length > 0) && (
+        <div className="mt-1 overflow-hidden rounded-lg border bg-white/95 shadow-lg backdrop-blur-md dark:bg-gray-900/95">
+          {message && <p className="px-3 py-2 text-xs text-muted-foreground">{message}</p>}
+          {results.map((result) => (
+            <button
+              key={`${result.latitude}-${result.longitude}`}
+              type="button"
+              onClick={() => selectLocation(result.latitude, result.longitude)}
+              className="block w-full border-b px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-muted"
+            >
+              <span className="block font-medium">{result.name}</span>
+              <span className="block text-xs text-muted-foreground">{[result.admin1, result.country].filter(Boolean).join(', ') || `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MapComponent() {
   const { mapCenter, mapZoom, selectedLocation } = useStore()
   const mapRef = useRef<any>(null)
@@ -163,6 +275,7 @@ export default function MapComponent() {
         )}
 
         <MapClickHandler />
+        <FlyToSelectedLocation />
 
         {/* Aquifer Zones */}
         {showAquiferZones && kenyaAquiferZones.map((zone, idx) => (
@@ -276,6 +389,8 @@ export default function MapComponent() {
           </>
         )}
       </MapContainer>
+
+      <MapSearch />
 
       {/* Layer Controls */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">

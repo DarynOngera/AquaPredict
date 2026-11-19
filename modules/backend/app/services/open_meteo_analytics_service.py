@@ -8,6 +8,7 @@ import httpx
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 DAILY_VARIABLES = (
     "temperature_2m_max,temperature_2m_min,temperature_2m_mean,"
     "precipitation_sum,precipitation_hours,wind_speed_10m_max,"
@@ -59,6 +60,27 @@ class OpenMeteoAnalyticsService:
             "current": forecast.get("current", {}),
             "daily": records,
         }
+
+    async def search_locations(self, name: str) -> List[Dict[str, Any]]:
+        """Resolve a place name into a compact set of map-ready locations."""
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            payload = await self._request(
+                client,
+                GEOCODING_URL,
+                {"name": name, "count": 5, "language": "en", "format": "json"},
+            )
+
+        return [
+            {
+                "name": result["name"],
+                "latitude": result["latitude"],
+                "longitude": result["longitude"],
+                "country": result.get("country"),
+                "admin1": result.get("admin1"),
+                "timezone": result.get("timezone"),
+            }
+            for result in payload.get("results", [])
+        ]
 
     @staticmethod
     async def _request(client: httpx.AsyncClient, url: str, params: Dict[str, Any]) -> Dict[str, Any]:

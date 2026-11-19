@@ -13,6 +13,20 @@ router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 logger = logging.getLogger(__name__)
 
 
+@router.get("/locations")
+async def search_locations(
+    name: str = Query(..., min_length=2, max_length=120, description="Place name or postal code"),
+) -> Dict[str, Any]:
+    """Search Open-Meteo's geocoding index for locations to center on the map."""
+    try:
+        results = await open_meteo_analytics_service.search_locations(name.strip())
+    except httpx.HTTPError as exc:
+        logger.warning("Open-Meteo geocoding request failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Location search is temporarily unavailable") from exc
+
+    return {"status": "success", "results": results}
+
+
 @router.get("/weather")
 async def get_weather_analytics(
     latitude: float = Query(-1.286389, ge=-90, le=90, description="WGS84 latitude"),
