@@ -19,7 +19,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           variant="ghost"
           size="icon"
           onClick={onMenuClick}
-          className="md:hidden"
+          aria-label="Toggle navigation"
         >
           <Menu className="h-5 w-5" />
         </Button>

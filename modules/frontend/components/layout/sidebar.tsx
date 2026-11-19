@@ -9,7 +9,7 @@ import Link from 'next/link'
 interface SidebarProps {
   open: boolean
   onClose: () => void
-  onToggle?: () => void
+  onToggle: () => void
 }
 
 const navigation = [
@@ -23,7 +23,6 @@ const navigation = [
 
 export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
   const pathname = usePathname()
-  const handleToggle = onToggle || onClose
 
   return (
     <>
@@ -38,7 +37,7 @@ export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
       {/* Open button when sidebar is closed (desktop only) */}
       {!open && (
         <button
-          onClick={handleToggle}
+          onClick={onToggle}
           className="hidden md:flex fixed left-0 top-20 z-40 items-center justify-center w-8 h-12 bg-card border border-l-0 rounded-r-lg shadow-md hover:bg-muted transition-colors"
           aria-label="Open sidebar"
           aria-expanded={false}
@@ -67,7 +66,7 @@ export function Sidebar({ open, onClose, onToggle }: SidebarProps) {
                 if (window.innerWidth < 768) {
                   onClose()
                 } else {
-                  handleToggle()
+                  onToggle()
                 }
               }}
               className="hover:bg-muted"

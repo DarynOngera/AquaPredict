@@ -138,10 +138,10 @@ export default function ReportsPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
+      <Header onMenuClick={() => setSidebarOpen((open) => !open)} />
       
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen((open) => !open)} />
         
         <main className="flex-1 overflow-y-auto">
           <OracleStatusIndicator />

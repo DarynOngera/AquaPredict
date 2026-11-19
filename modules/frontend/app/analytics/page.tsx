@@ -114,9 +114,9 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
+      <Header onMenuClick={() => setSidebarOpen((open) => !open)} />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen((open) => !open)} />
         <main className="flex-1 overflow-y-auto">
           <div className="container mx-auto space-y-6 p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
