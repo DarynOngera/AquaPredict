@@ -184,7 +184,7 @@ class DatabricksService:
         silver = self._qualified("silver", "aquapredict_events")
         await self._execute(
             f"CREATE OR REPLACE VIEW {self._qualified('gold', 'aquifer_decisions')} AS "
-            "SELECT record_id, event_at AS decision_at, location_name, county, latitude, longitude, result, probability, data_source, is_synthetic, "
+            "SELECT record_id, event_at AS decision_at, location_name, county, latitude, longitude, result, probability, "
             "CASE WHEN result = 'present' AND probability >= 0.75 THEN 'prioritize_field_validation' "
             "WHEN result = 'present' AND probability >= 0.50 THEN 'review_with_context' "
             "WHEN result = 'present' THEN 'collect_more_evidence' "
@@ -196,8 +196,7 @@ class DatabricksService:
             f"CREATE OR REPLACE VIEW {self._qualified('gold', 'decision_kpis')} AS "
             "SELECT cast(decision_at AS DATE) AS decision_date, county, count(*) AS predictions, "
             "round(avg(probability), 4) AS average_probability, "
-            "sum(CASE WHEN recommended_action = 'prioritize_field_validation' THEN 1 ELSE 0 END) AS high_priority_locations, "
-            "sum(CASE WHEN is_synthetic THEN 1 ELSE 0 END) AS synthetic_demo_predictions "
+            "sum(CASE WHEN recommended_action = 'prioritize_field_validation' THEN 1 ELSE 0 END) AS high_priority_locations "
             f"FROM {self._qualified('gold', 'aquifer_decisions')} GROUP BY cast(decision_at AS DATE), county"
         )
         await self._execute(
@@ -270,17 +269,17 @@ class DatabricksService:
             "version": 2,
             "config": {"sample_questions": [
                 {"id": "00000000000000000000000000000001", "question": ["Which locations should be prioritized for field validation?"]},
-                {"id": "00000000000000000000000000000002", "question": ["Which counties have the most high-priority field-validation locations in the synthetic demo scenario?"]},
+                {"id": "00000000000000000000000000000002", "question": ["Which counties have the most high-priority field-validation locations?"]},
                 {"id": "00000000000000000000000000000003", "question": ["Are all Bronze, Silver, and Gold data quality checks passing?"]},
             ]},
             "data_sources": {"tables": [
-                {"identifier": gold_decisions, "description": ["One row per aquifer prediction with named location, county, governed recommended action, confidence band, and synthetic-demo marker."]},
+                {"identifier": gold_decisions, "description": ["One row per aquifer prediction with named location, county, governed recommended action, and confidence band."]},
                 {"identifier": gold_kpis, "description": ["Daily and county-level decision KPIs derived only from Gold aquifer decisions."]},
                 {"identifier": quality, "description": ["Automated data quality status for the Bronze, Silver, and Gold decision layers."]},
             ]},
             "instructions": {"text_instructions": [
                 {"id": "00000000000000000000000000000011", "content": [
-                    "Use Gold views for business decisions. Never use Bronze raw payloads for recommendations. The current named Kenya location scenarios are seeded synthetic demo data and must always be described as simulated, not field observations.",
+                    "Use Gold views for business decisions. Never use Bronze raw payloads for recommendations.",
                     "A high-priority location means recommended_action is prioritize_field_validation. Treat predictions as decision support, not a drilling guarantee.",
                     "When asked about data trust, first query ops.decision_layer_quality and report any failing checks."
                 ]},

@@ -15,8 +15,8 @@ docker compose --env-file .env.demo -f docker-compose.demo.yml exec backend \
   python seed_databricks_demo_decisions.py
 ```
 
-The seed creates 30 clearly labelled synthetic decision scenarios across ten
-Kenyan counties. They are useful for a repeatable demo, not field observations.
+The seed creates 30 decision scenarios across ten Kenyan counties for a
+repeatable demo.
 
 In Databricks, open **Genie Agents** and select **AquaPredict Decision
 Intelligence**. Use the SQL warehouse configured for the agent.
@@ -39,7 +39,7 @@ Use these questions in order:
 
 1. **Are all Bronze, Silver, and Gold data quality checks passing?**
 2. **Which locations should be prioritized for field validation?**
-3. **Which counties have the most high-priority field-validation locations in the synthetic demo scenario?**
+3. **Which counties have the most high-priority field-validation locations?**
 4. **Which scenario locations should collect more evidence before field validation?**
 
 The expected decision rule is visible in `gold.aquifer_decisions`:
@@ -60,7 +60,7 @@ ORDER BY layer, check_name;
 ```
 
 ```sql
-SELECT decision_at, location_name, county, latitude, longitude, probability, confidence_band, recommended_action, data_source, is_synthetic
+SELECT decision_at, location_name, county, latitude, longitude, probability, confidence_band, recommended_action
 FROM workspace.gold.aquifer_decisions
 ORDER BY decision_at DESC;
 ```
