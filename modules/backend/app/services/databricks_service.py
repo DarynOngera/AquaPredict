@@ -14,6 +14,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -26,6 +27,7 @@ class DatabricksService:
     def __init__(self) -> None:
         self.host = os.getenv("DATABRICKS_HOST", "").rstrip("/")
         self.warehouse_id = os.getenv("DATABRICKS_WAREHOUSE_ID", "")
+        self.http_path = os.getenv("DATABRICKS_HTTP_PATH", "")
         self.catalog = os.getenv("DATABRICKS_CATALOG", "aquapredict")
         self.schema = os.getenv("DATABRICKS_SCHEMA", "reporting")
         self.enabled = os.getenv("DATABRICKS_ENABLED", "false").lower() == "true"
@@ -136,15 +138,70 @@ class DatabricksService:
             self._initialized = True
 
     async def _execute(self, statement: str) -> None:
-        headers = {"Authorization": f"Bearer {await self._access_token()}"}
+        access_token = await self._access_token()
+        headers = {"Authorization": f"Bearer {access_token}"}
         payload = {"warehouse_id": self.warehouse_id, "statement": statement, "wait_timeout": "10s"}
         async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.post(f"{self.host}/api/2.0/sql/statements", headers=headers, json=payload)
-            response.raise_for_status()
+            response = await client.post(f"{self.host}/api/2.0/sql/statements/", headers=headers, json=payload)
+            # Lakehouse Runtime warehouses expose Statement Execution v2.
+            # Keep the v1 endpoint first for all conventional warehouse types,
+            # then fall back only when the workspace reports that it is absent.
+            if response.status_code == 404:
+                # The Lakehouse Runtime route currently JSON-decodes path
+                # parameters. Encode an all-numeric warehouse ID as a JSON
+                # string so it is not interpreted as an integer.
+                warehouse_path_id = self.warehouse_id
+                if warehouse_path_id.isdigit():
+                    warehouse_path_id = quote(json.dumps(warehouse_path_id), safe="")
+                response = await client.post(
+                    f"{self.host}/api/2.0/sql/warehouses/{warehouse_path_id}/statements",
+                    headers=headers,
+                    json={
+                        "statement": statement,
+                        "catalog": self.catalog,
+                        "schema": self.schema,
+                        "format": "JSON_ARRAY",
+                        "wait_timeout": "10s",
+                    },
+                )
+            connector_fallback = (
+                response.status_code == 404
+                or (
+                    response.status_code == 400
+                    and "warehouse type is not supported by this api" in response.text.lower()
+                )
+            )
+            if connector_fallback:
+                await asyncio.to_thread(self._execute_via_sql_connector, statement, access_token)
+                return
+            if response.is_error:
+                # Databricks returns the actionable warehouse/API validation
+                # reason in its JSON body. Keep it bounded for safe logs.
+                detail = response.text[:1000]
+                raise RuntimeError(
+                    f"Databricks SQL request returned {response.status_code}: {detail}"
+                )
             result = response.json()
         state = result.get("status", {}).get("state")
         if state == "FAILED":
             raise RuntimeError(result.get("status", {}).get("error", {}).get("message", "Databricks SQL execution failed"))
+
+    def _execute_via_sql_connector(self, statement: str, access_token: str) -> None:
+        """Execute against the standard SQL Warehouse Thrift endpoint.
+
+        This is the compatibility route for workspaces that do not expose the
+        Statement Execution API for conventional SQL warehouse types.
+        """
+        from databricks import sql
+
+        hostname = self.host.removeprefix("https://").removeprefix("http://")
+        with sql.connect(
+            server_hostname=hostname,
+            http_path=self.http_path or f"/sql/1.0/warehouses/{self.warehouse_id}",
+            access_token=access_token,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(statement)
 
     async def _access_token(self) -> str:
         if self.pat:
