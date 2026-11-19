@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Deploy the current AquaPredict demo stack to a Linux host with Docker Compose.
-# Usage: ./deploy_now.sh user@demo-host [remote-directory]
-# Example: ./deploy_now.sh opc@203.0.113.10 aquapredict-demo
+# Start the current AquaPredict demo stack locally, or deploy it over SSH.
+# Local:  ./deploy_now.sh
+# Remote: ./deploy_now.sh user@demo-host [remote-directory]
 
 set -Eeuo pipefail
 
 usage() {
-  echo "Usage: $0 user@host [remote-directory]" >&2
+  echo "Usage: $0 [user@host [remote-directory]]" >&2
   echo "" >&2
-  echo "Required locally: .env.demo and credentials/gee_key.json" >&2
-  echo "Required remotely: Docker Engine with the Docker Compose plugin" >&2
+  echo "Without a host, starts the demo locally at http://localhost." >&2
+  echo "Required: .env.demo, credentials/gee_key.json, and Docker Compose." >&2
 }
 
 if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
@@ -23,9 +23,54 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 env_file="$script_dir/.env.demo"
 credentials_dir="$script_dir/credentials"
 
+if [[ ! -f "$env_file" ]]; then
+  echo "Missing $env_file. Copy .env.demo.example and configure it first." >&2
+  exit 1
+fi
+
+if [[ ! -f "$credentials_dir/gee_key.json" ]]; then
+  echo "Missing $credentials_dir/gee_key.json. GEE is required for this demo deployment." >&2
+  exit 1
+fi
+
 if [[ -z "$target" ]]; then
-  usage
-  exit 2
+  command -v docker >/dev/null || {
+    echo "Missing required command: docker" >&2
+    exit 1
+  }
+  docker compose version >/dev/null
+
+  echo "Building and starting the local demo stack..."
+  cd "$script_dir"
+  chmod 700 credentials
+  chmod 600 credentials/gee_key.json .env.demo
+  docker compose --env-file .env.demo -f docker-compose.demo.yml up -d --build
+
+  echo "Waiting for the service health check..."
+  backend_id=$(docker compose --env-file .env.demo -f docker-compose.demo.yml ps -q backend)
+  if [[ -z "$backend_id" ]]; then
+    echo "Backend container was not created." >&2
+    exit 1
+  fi
+  for attempt in $(seq 1 30); do
+    if [[ "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$backend_id")" == "healthy" ]]; then
+      break
+    fi
+    if [[ "$attempt" == 30 ]]; then
+      docker compose --env-file .env.demo -f docker-compose.demo.yml ps
+      docker compose --env-file .env.demo -f docker-compose.demo.yml logs --tail=100 backend
+      exit 1
+    fi
+    sleep 2
+  done
+
+  demo_port=$(awk -F= '$1 == "DEMO_PORT" { port=$2 } END { print port }' .env.demo)
+  demo_port=${demo_port:-80}
+  curl --fail --silent --show-error "http://localhost:${demo_port}/health" >/dev/null
+  docker compose --env-file .env.demo -f docker-compose.demo.yml ps
+  echo
+  echo "Local demo ready: http://localhost:${demo_port}"
+  exit 0
 fi
 
 # Keep the target safely within the remote account's home directory.
@@ -40,16 +85,6 @@ for command in rsync ssh; do
     exit 1
   }
 done
-
-if [[ ! -f "$env_file" ]]; then
-  echo "Missing $env_file. Copy .env.demo.example and configure it first." >&2
-  exit 1
-fi
-
-if [[ ! -f "$credentials_dir/gee_key.json" ]]; then
-  echo "Missing $credentials_dir/gee_key.json. GEE is required for this demo deployment." >&2
-  exit 1
-fi
 
 echo "Checking Docker Compose on $target..."
 ssh "$target" 'docker compose version >/dev/null'
