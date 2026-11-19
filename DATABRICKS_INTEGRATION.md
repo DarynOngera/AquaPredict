@@ -49,6 +49,12 @@ After provisioning, use these starter Genie questions:
 - What is the average aquifer probability by decision date?
 - Are all Bronze, Silver, and Gold data quality checks passing?
 
+For a repeatable talk demo, run `seed_databricks_demo_decisions.py` in the
+backend container. It seeds 30 named, dated `synthetic_demo` predictions across
+ten Kenyan counties. Gold exposes the location name, county, and synthetic flag
+so Genie can answer useful questions while clearly distinguishing scenarios
+from live observations.
+
 Genie evaluates Unity Catalog access as the person asking the question. Grant
 each demo user only the Gold and Ops assets, never Bronze:
 

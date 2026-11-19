@@ -6,8 +6,17 @@ checks. It never uses the raw Bronze payloads to make a recommendation.
 
 ## Before the talk
 
-Run one or more AquaPredict predictions and generate at least one report. Each
-new event is mirrored into the decision layer in the background.
+Seed the talk scenarios, then optionally run one live AquaPredict prediction.
+The seed replaces only the prior `synthetic_demo` rows and leaves live app data
+intact:
+
+```bash
+docker compose --env-file .env.demo -f docker-compose.demo.yml exec backend \
+  python seed_databricks_demo_decisions.py
+```
+
+The seed creates 30 clearly labelled synthetic decision scenarios across ten
+Kenyan counties. They are useful for a repeatable demo, not field observations.
 
 In Databricks, open **Genie Agents** and select **AquaPredict Decision
 Intelligence**. Use the SQL warehouse configured for the agent.
@@ -30,8 +39,8 @@ Use these questions in order:
 
 1. **Are all Bronze, Silver, and Gold data quality checks passing?**
 2. **Which locations should be prioritized for field validation?**
-3. **What is the average aquifer probability by decision date?**
-4. **How many high-priority locations are backed by GEE data?**
+3. **Which counties have the most high-priority field-validation locations in the synthetic demo scenario?**
+4. **Which scenario locations should collect more evidence before field validation?**
 
 The expected decision rule is visible in `gold.aquifer_decisions`:
 
@@ -51,7 +60,7 @@ ORDER BY layer, check_name;
 ```
 
 ```sql
-SELECT decision_at, latitude, longitude, probability, confidence_band, recommended_action, data_source
+SELECT decision_at, location_name, county, latitude, longitude, probability, confidence_band, recommended_action, data_source, is_synthetic
 FROM workspace.gold.aquifer_decisions
 ORDER BY decision_at DESC;
 ```

@@ -171,13 +171,17 @@ class DatabricksService:
             f"CREATE OR REPLACE VIEW {self._qualified('silver', 'aquapredict_events')} AS "
             "SELECT record_id, lower(trim(event_type)) AS event_type, event_at, latitude, longitude, "
             "lower(trim(result)) AS result, cast(probability AS DOUBLE) AS probability, "
-            "lower(trim(data_source)) AS data_source, report_type, payload_json, ingested_at "
+            "lower(trim(data_source)) AS data_source, report_type, "
+            "coalesce(get_json_object(payload_json, '$.location_name'), concat('Unnamed location ', cast(latitude AS STRING), ', ', cast(longitude AS STRING))) AS location_name, "
+            "coalesce(get_json_object(payload_json, '$.county'), 'Unspecified') AS county, "
+            "coalesce(cast(get_json_object(payload_json, '$.is_synthetic') AS BOOLEAN), false) AS is_synthetic, "
+            "payload_json, ingested_at "
             f"FROM {bronze} WHERE record_id IS NOT NULL AND event_type IN ('prediction', 'recharge_forecast', 'report')"
         )
         silver = self._qualified("silver", "aquapredict_events")
         await self._execute(
             f"CREATE OR REPLACE VIEW {self._qualified('gold', 'aquifer_decisions')} AS "
-            "SELECT record_id, event_at AS decision_at, latitude, longitude, result, probability, data_source, "
+            "SELECT record_id, event_at AS decision_at, location_name, county, latitude, longitude, result, probability, data_source, is_synthetic, "
             "CASE WHEN result = 'present' AND probability >= 0.75 THEN 'prioritize_field_validation' "
             "WHEN result = 'present' AND probability >= 0.50 THEN 'review_with_context' "
             "WHEN result = 'present' THEN 'collect_more_evidence' "
@@ -187,11 +191,11 @@ class DatabricksService:
         )
         await self._execute(
             f"CREATE OR REPLACE VIEW {self._qualified('gold', 'decision_kpis')} AS "
-            "SELECT cast(decision_at AS DATE) AS decision_date, count(*) AS predictions, "
+            "SELECT cast(decision_at AS DATE) AS decision_date, county, count(*) AS predictions, "
             "round(avg(probability), 4) AS average_probability, "
             "sum(CASE WHEN recommended_action = 'prioritize_field_validation' THEN 1 ELSE 0 END) AS high_priority_locations, "
-            "sum(CASE WHEN data_source = 'gee' THEN 1 ELSE 0 END) AS gee_backed_predictions "
-            f"FROM {self._qualified('gold', 'aquifer_decisions')} GROUP BY cast(decision_at AS DATE)"
+            "sum(CASE WHEN is_synthetic THEN 1 ELSE 0 END) AS synthetic_demo_predictions "
+            f"FROM {self._qualified('gold', 'aquifer_decisions')} GROUP BY cast(decision_at AS DATE), county"
         )
         await self._execute(
             f"CREATE OR REPLACE VIEW {self._qualified('ops', 'decision_layer_quality')} AS "
@@ -228,7 +232,16 @@ class DatabricksService:
             response.raise_for_status()
             for space in response.json().get("spaces", []):
                 if space.get("title") == self.genie_title:
-                    return {"enabled": True, "created": False, "space_id": space.get("space_id"), "title": self.genie_title}
+                    update = await client.patch(
+                        f"{self.host}/api/2.0/genie/spaces/{space['space_id']}",
+                        headers=headers,
+                        json={
+                            "description": "Governed AquaPredict demo decisions, KPIs, and data quality checks.",
+                            "serialized_space": json.dumps(self._genie_space_config()),
+                        },
+                    )
+                    update.raise_for_status()
+                    return {"enabled": True, "created": False, "updated": True, "space_id": space.get("space_id"), "title": self.genie_title}
             config = self._genie_space_config()
             payload: Dict[str, Any] = {
                 "warehouse_id": self.warehouse_id,
@@ -254,17 +267,17 @@ class DatabricksService:
             "version": 2,
             "config": {"sample_questions": [
                 {"id": "00000000000000000000000000000001", "question": ["Which locations should be prioritized for field validation?"]},
-                {"id": "00000000000000000000000000000002", "question": ["What is the average aquifer probability by decision date?"]},
+                {"id": "00000000000000000000000000000002", "question": ["Which counties have the most high-priority field-validation locations in the synthetic demo scenario?"]},
                 {"id": "00000000000000000000000000000003", "question": ["Are all Bronze, Silver, and Gold data quality checks passing?"]},
             ]},
             "data_sources": {"tables": [
-                {"identifier": gold_decisions, "description": ["One row per aquifer prediction with governed recommended action and confidence band."]},
-                {"identifier": gold_kpis, "description": ["Daily business KPIs derived only from Gold aquifer decisions."]},
+                {"identifier": gold_decisions, "description": ["One row per aquifer prediction with named location, county, governed recommended action, confidence band, and synthetic-demo marker."]},
+                {"identifier": gold_kpis, "description": ["Daily and county-level decision KPIs derived only from Gold aquifer decisions."]},
                 {"identifier": quality, "description": ["Automated data quality status for the Bronze, Silver, and Gold decision layers."]},
             ]},
             "instructions": {"text_instructions": [
                 {"id": "00000000000000000000000000000011", "content": [
-                    "Use Gold views for business decisions. Never use Bronze raw payloads for recommendations.",
+                    "Use Gold views for business decisions. Never use Bronze raw payloads for recommendations. The current named Kenya location scenarios are seeded synthetic demo data and must always be described as simulated, not field observations.",
                     "A high-priority location means recommended_action is prioritize_field_validation. Treat predictions as decision support, not a drilling guarantee.",
                     "When asked about data trust, first query ops.decision_layer_quality and report any failing checks."
                 ]},
