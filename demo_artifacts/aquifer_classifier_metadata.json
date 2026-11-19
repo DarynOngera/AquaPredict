@@ -1,0 +1,21 @@
+{
+  "model_type": "RandomForestClassifier",
+  "purpose": "synthetic-label demonstration only",
+  "data_provenance": "Kenya-like simulated hydro-climatic features and probabilistic synthetic labels",
+  "not_for_operational_use": true,
+  "feature_names": [
+    "elevation",
+    "slope",
+    "twi",
+    "precip_mean",
+    "temp_mean",
+    "ndvi",
+    "landcover"
+  ],
+  "training_samples": 3200,
+  "test_samples": 800,
+  "positive_class_rate": 0.6963,
+  "holdout_accuracy": 0.7063,
+  "holdout_roc_auc": 0.7454,
+  "random_seed": 42
+}

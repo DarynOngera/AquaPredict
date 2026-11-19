@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY modules/backend/ ./
 COPY model_artifacts/ /app/model_artifacts/
+COPY demo_artifacts/ /app/models/
 
 ENV PYTHONUNBUFFERED=1 \
     MODEL_ARTIFACTS_DIR=/app/model_artifacts

@@ -758,6 +758,9 @@ async def startup_event():
         logger.info("Google Earth Engine initialized")
     except Exception as e:
         logger.warning("GEE unavailable - using simulated data")
+
+    # Load the aquifer/recharge artifacts used by the primary prediction API.
+    model_service.load_models()
     
     logger.info("=" * 60)
     logger.info("AquaPredict API ready")

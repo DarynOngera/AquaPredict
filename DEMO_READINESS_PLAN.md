@@ -19,6 +19,10 @@ Use the three checked-in `model_artifacts/*.joblib` files only for the
 precipitation prediction flow. Defer OKE, Terraform, Airflow, data ingestion,
 and the legacy `modules/prediction-service` stack until after the demo.
 
+The aquifer classifier can be trained from the reproducible synthetic-label
+pipeline in `modules/backend/train_demo_aquifer_model.py`. Its model and
+metadata are explicitly demonstration-only, not ground-truth validated.
+
 ## Phase 0 — Secure the repository (first)
 
 1. Treat values in the tracked `infrastructure/terraform/terraform.tfvars` as
