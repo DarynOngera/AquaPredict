@@ -33,6 +33,7 @@ class DatabricksService:
         self.genie_enabled = os.getenv("DATABRICKS_GENIE_ENABLED", "false").lower() == "true"
         self.genie_title = os.getenv("DATABRICKS_GENIE_TITLE", "AquaPredict Decision Intelligence")
         self.genie_parent_path = os.getenv("DATABRICKS_GENIE_PARENT_PATH", "")
+        self.genie_readers = [email.strip() for email in os.getenv("DATABRICKS_GENIE_READERS", "").split(",") if email.strip()]
         self.enabled = os.getenv("DATABRICKS_ENABLED", "false").lower() == "true"
         self.client_id = os.getenv("DATABRICKS_CLIENT_ID", "")
         self.client_secret = os.getenv("DATABRICKS_CLIENT_SECRET", "")
@@ -162,6 +163,8 @@ class DatabricksService:
                 "ingested_at TIMESTAMP) USING DELTA"
             )
             await self._create_decision_views()
+            for reader in self.genie_readers:
+                await self.grant_genie_reader(reader)
             self._initialized = True
 
     async def _create_decision_views(self) -> None:
@@ -288,6 +291,32 @@ class DatabricksService:
         columns = ", ".join(values.keys())
         literals = ", ".join(self._literal(value) for value in values.values())
         await self._execute(f"INSERT INTO {target} ({columns}) VALUES ({literals})")
+
+    async def grant_genie_reader(self, email: str) -> None:
+        """Grant a named user only the Gold and Ops views consumed by Genie."""
+        if not self.configured:
+            raise RuntimeError("Databricks mirroring is not configured")
+        principal = "`" + email.replace("`", "``") + "`"
+        statements = [
+            f"GRANT USE CATALOG ON CATALOG {self.catalog} TO {principal}",
+            f"GRANT USE SCHEMA ON SCHEMA {self.catalog}.gold TO {principal}",
+            f"GRANT USE SCHEMA ON SCHEMA {self.catalog}.ops TO {principal}",
+            f"GRANT SELECT ON VIEW {self.catalog}.gold.aquifer_decisions TO {principal}",
+            f"GRANT SELECT ON VIEW {self.catalog}.gold.decision_kpis TO {principal}",
+            f"GRANT SELECT ON VIEW {self.catalog}.ops.decision_layer_quality TO {principal}",
+        ]
+        access_token = await self._access_token()
+        await asyncio.to_thread(self._apply_grants_via_sql_connector, statements, access_token)
+
+    def _apply_grants_via_sql_connector(self, statements: list[str], access_token: str) -> None:
+        from databricks import sql
+
+        hostname = self.host.removeprefix("https://").removeprefix("http://")
+        http_path = self.http_path or f"/sql/1.0/warehouses/{self.warehouse_id}"
+        with sql.connect(server_hostname=hostname, http_path=http_path, access_token=access_token) as connection:
+            with connection.cursor() as cursor:
+                for statement in statements:
+                    cursor.execute(statement)
 
     async def _execute(self, statement: str) -> None:
         access_token = await self._access_token()

@@ -32,6 +32,7 @@ inside the backend container:
 ```dotenv
 DATABRICKS_GENIE_ENABLED=true
 DATABRICKS_GENIE_TITLE=AquaPredict Decision Intelligence
+DATABRICKS_GENIE_READERS=user@example.com
 ```
 
 ```bash
@@ -40,7 +41,9 @@ docker compose --env-file .env.demo -f docker-compose.demo.yml exec backend \
 ```
 
 The command is idempotent: schemas, tables, and views are recreated safely;
-an existing Genie Agent with the configured title is reused. The service
+an existing Genie Agent with the configured title is reused. Every reader in
+`DATABRICKS_GENIE_READERS` is re-granted Gold and Ops access after a view
+refresh, so `CREATE OR REPLACE VIEW` never leaves Genie without access. The service
 principal's OAuth secret needs the `genie` API scope in addition to SQL access.
 
 After provisioning, use these starter Genie questions:
