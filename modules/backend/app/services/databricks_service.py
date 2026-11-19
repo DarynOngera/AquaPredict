@@ -30,6 +30,9 @@ class DatabricksService:
         self.http_path = os.getenv("DATABRICKS_HTTP_PATH", "")
         self.catalog = os.getenv("DATABRICKS_CATALOG", "aquapredict")
         self.schema = os.getenv("DATABRICKS_SCHEMA", "reporting")
+        self.genie_enabled = os.getenv("DATABRICKS_GENIE_ENABLED", "false").lower() == "true"
+        self.genie_title = os.getenv("DATABRICKS_GENIE_TITLE", "AquaPredict Decision Intelligence")
+        self.genie_parent_path = os.getenv("DATABRICKS_GENIE_PARENT_PATH", "")
         self.enabled = os.getenv("DATABRICKS_ENABLED", "false").lower() == "true"
         self.client_id = os.getenv("DATABRICKS_CLIENT_ID", "")
         self.client_secret = os.getenv("DATABRICKS_CLIENT_SECRET", "")
@@ -55,6 +58,8 @@ class DatabricksService:
             "catalog": self.catalog,
             "schema": self.schema,
             "auth": "oauth_m2m" if self.client_id and self.client_secret else "personal_access_token" if self.pat else "missing",
+            "decision_layer": {"schemas": ["bronze", "silver", "gold", "ops"]},
+            "genie": {"enabled": self.genie_enabled, "title": self.genie_title},
         }
 
     async def record_prediction(self, prediction: Dict[str, Any]) -> None:
@@ -107,9 +112,23 @@ class DatabricksService:
             return
         try:
             await self._ensure_tables()
-            columns = ", ".join(values.keys())
-            literals = ", ".join(self._literal(value) for value in values.values())
-            await self._execute(f"INSERT INTO {self._table(table)} ({columns}) VALUES ({literals})")
+            await self._insert(self._table(table), values)
+            await self._insert(
+                self._qualified("bronze", "aquapredict_events"),
+                {
+                    "record_id": values["record_id"],
+                    "event_type": table.removesuffix("s"),
+                    "event_at": values["created_at"],
+                    "latitude": values.get("latitude"),
+                    "longitude": values.get("longitude"),
+                    "result": values.get("result"),
+                    "probability": values.get("probability"),
+                    "data_source": values.get("data_source"),
+                    "report_type": values.get("report_type"),
+                    "payload_json": values["payload_json"],
+                    "ingested_at": self._now(),
+                },
+            )
         except Exception as exc:  # Mirroring must never make product requests fail.
             logger.warning("Databricks mirror failed for %s: %s", table, exc)
 
@@ -119,7 +138,8 @@ class DatabricksService:
         async with self._initialization_lock:
             if self._initialized:
                 return
-            await self._execute(f"CREATE SCHEMA IF NOT EXISTS {self.catalog}.{self.schema}")
+            for schema in (self.schema, "bronze", "silver", "gold", "ops"):
+                await self._execute(f"CREATE SCHEMA IF NOT EXISTS {self.catalog}.{schema}")
             await self._execute(
                 f"CREATE TABLE IF NOT EXISTS {self._table('predictions')} "
                 "(record_id STRING, created_at TIMESTAMP, latitude DOUBLE, longitude DOUBLE, result STRING, "
@@ -135,7 +155,126 @@ class DatabricksService:
                 "(record_id STRING, created_at TIMESTAMP, latitude DOUBLE, longitude DOUBLE, report_type STRING, "
                 "payload_json STRING) USING DELTA"
             )
+            await self._execute(
+                f"CREATE TABLE IF NOT EXISTS {self._qualified('bronze', 'aquapredict_events')} "
+                "(record_id STRING, event_type STRING, event_at TIMESTAMP, latitude DOUBLE, longitude DOUBLE, "
+                "result STRING, probability DOUBLE, data_source STRING, report_type STRING, payload_json STRING, "
+                "ingested_at TIMESTAMP) USING DELTA"
+            )
+            await self._create_decision_views()
             self._initialized = True
+
+    async def _create_decision_views(self) -> None:
+        """Create governed Silver, Gold and Ops contracts over immutable Bronze events."""
+        bronze = self._qualified("bronze", "aquapredict_events")
+        await self._execute(
+            f"CREATE OR REPLACE VIEW {self._qualified('silver', 'aquapredict_events')} AS "
+            "SELECT record_id, lower(trim(event_type)) AS event_type, event_at, latitude, longitude, "
+            "lower(trim(result)) AS result, cast(probability AS DOUBLE) AS probability, "
+            "lower(trim(data_source)) AS data_source, report_type, payload_json, ingested_at "
+            f"FROM {bronze} WHERE record_id IS NOT NULL AND event_type IN ('prediction', 'recharge_forecast', 'report')"
+        )
+        silver = self._qualified("silver", "aquapredict_events")
+        await self._execute(
+            f"CREATE OR REPLACE VIEW {self._qualified('gold', 'aquifer_decisions')} AS "
+            "SELECT record_id, event_at AS decision_at, latitude, longitude, result, probability, data_source, "
+            "CASE WHEN result = 'present' AND probability >= 0.75 THEN 'prioritize_field_validation' "
+            "WHEN result = 'present' AND probability >= 0.50 THEN 'review_with_context' "
+            "WHEN result = 'present' THEN 'collect_more_evidence' "
+            "ELSE 'do_not_prioritize' END AS recommended_action, "
+            "CASE WHEN probability >= 0.75 THEN 'high' WHEN probability >= 0.50 THEN 'medium' ELSE 'low' END AS confidence_band "
+            f"FROM {silver} WHERE event_type = 'prediction'"
+        )
+        await self._execute(
+            f"CREATE OR REPLACE VIEW {self._qualified('gold', 'decision_kpis')} AS "
+            "SELECT cast(decision_at AS DATE) AS decision_date, count(*) AS predictions, "
+            "round(avg(probability), 4) AS average_probability, "
+            "sum(CASE WHEN recommended_action = 'prioritize_field_validation' THEN 1 ELSE 0 END) AS high_priority_locations, "
+            "sum(CASE WHEN data_source = 'gee' THEN 1 ELSE 0 END) AS gee_backed_predictions "
+            f"FROM {self._qualified('gold', 'aquifer_decisions')} GROUP BY cast(decision_at AS DATE)"
+        )
+        await self._execute(
+            f"CREATE OR REPLACE VIEW {self._qualified('ops', 'decision_layer_quality')} AS "
+            "SELECT 'bronze' AS layer, 'payload_present' AS check_name, "
+            "count(CASE WHEN payload_json IS NULL OR length(payload_json) = 0 THEN 1 END) = 0 AS passed, "
+            "count(CASE WHEN payload_json IS NULL OR length(payload_json) = 0 THEN 1 END) AS failed_rows, current_timestamp() AS checked_at "
+            f"FROM {bronze} UNION ALL "
+            "SELECT 'silver', 'prediction_probability_in_range', "
+            "count(CASE WHEN event_type = 'prediction' AND (probability IS NULL OR probability < 0 OR probability > 1) THEN 1 END) = 0, "
+            "count(CASE WHEN event_type = 'prediction' AND (probability IS NULL OR probability < 0 OR probability > 1) THEN 1 END), current_timestamp() "
+            f"FROM {silver} UNION ALL "
+            "SELECT 'gold', 'decision_action_present', count(CASE WHEN recommended_action IS NULL THEN 1 END) = 0, "
+            "count(CASE WHEN recommended_action IS NULL THEN 1 END), current_timestamp() "
+            f"FROM {self._qualified('gold', 'aquifer_decisions')}"
+        )
+
+    async def bootstrap_decision_layer(self) -> Dict[str, Any]:
+        """Provision the medallion contracts and optionally a reusable Genie Agent."""
+        if not self.configured:
+            return {"configured": False, "message": "Databricks mirroring is not configured"}
+        await self._ensure_tables()
+        genie = await self._ensure_genie_space() if self.genie_enabled else {"enabled": False}
+        return {
+            "configured": True,
+            "catalog": self.catalog,
+            "schemas": [self.schema, "bronze", "silver", "gold", "ops"],
+            "genie": genie,
+        }
+
+    async def _ensure_genie_space(self) -> Dict[str, Any]:
+        headers = {"Authorization": f"Bearer {await self._access_token()}"}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{self.host}/api/2.0/genie/spaces", headers=headers)
+            response.raise_for_status()
+            for space in response.json().get("spaces", []):
+                if space.get("title") == self.genie_title:
+                    return {"enabled": True, "created": False, "space_id": space.get("space_id"), "title": self.genie_title}
+            config = self._genie_space_config()
+            payload: Dict[str, Any] = {
+                "warehouse_id": self.warehouse_id,
+                "title": self.genie_title,
+                "description": "Governed AquaPredict aquifer decisions, KPIs, and data quality checks.",
+                "serialized_space": json.dumps(config),
+            }
+            if self.genie_parent_path:
+                payload["parent_path"] = self.genie_parent_path
+            response = await client.post(f"{self.host}/api/2.0/genie/spaces", headers=headers, json=payload)
+            if response.is_error:
+                raise RuntimeError(
+                    f"Genie space creation returned {response.status_code}: {response.text[:2000]}"
+                )
+            space = response.json()
+        return {"enabled": True, "created": True, "space_id": space.get("space_id"), "title": self.genie_title}
+
+    def _genie_space_config(self) -> Dict[str, Any]:
+        gold_decisions = self._qualified("gold", "aquifer_decisions")
+        gold_kpis = self._qualified("gold", "decision_kpis")
+        quality = self._qualified("ops", "decision_layer_quality")
+        return {
+            "version": 2,
+            "config": {"sample_questions": [
+                {"id": "00000000000000000000000000000001", "question": ["Which locations should be prioritized for field validation?"]},
+                {"id": "00000000000000000000000000000002", "question": ["What is the average aquifer probability by decision date?"]},
+                {"id": "00000000000000000000000000000003", "question": ["Are all Bronze, Silver, and Gold data quality checks passing?"]},
+            ]},
+            "data_sources": {"tables": [
+                {"identifier": gold_decisions, "description": ["One row per aquifer prediction with governed recommended action and confidence band."]},
+                {"identifier": gold_kpis, "description": ["Daily business KPIs derived only from Gold aquifer decisions."]},
+                {"identifier": quality, "description": ["Automated data quality status for the Bronze, Silver, and Gold decision layers."]},
+            ]},
+            "instructions": {"text_instructions": [
+                {"id": "00000000000000000000000000000011", "content": [
+                    "Use Gold views for business decisions. Never use Bronze raw payloads for recommendations.",
+                    "A high-priority location means recommended_action is prioritize_field_validation. Treat predictions as decision support, not a drilling guarantee.",
+                    "When asked about data trust, first query ops.decision_layer_quality and report any failing checks."
+                ]},
+            ]},
+        }
+
+    async def _insert(self, target: str, values: Dict[str, Any]) -> None:
+        columns = ", ".join(values.keys())
+        literals = ", ".join(self._literal(value) for value in values.values())
+        await self._execute(f"INSERT INTO {target} ({columns}) VALUES ({literals})")
 
     async def _execute(self, statement: str) -> None:
         access_token = await self._access_token()
@@ -221,7 +360,10 @@ class DatabricksService:
         return self._token
 
     def _table(self, table: str) -> str:
-        return f"{self.catalog}.{self.schema}.{table}"
+        return self._qualified(self.schema, table)
+
+    def _qualified(self, schema: str, table: str) -> str:
+        return f"{self.catalog}.{schema}.{table}"
 
     @staticmethod
     def _literal(value: Any) -> str:

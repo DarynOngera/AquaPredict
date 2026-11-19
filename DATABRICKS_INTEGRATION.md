@@ -6,6 +6,49 @@ It is **disabled by default**. The existing local and demo flows retain their
 current behaviour if Databricks is not configured or if it is temporarily
 unavailable.
 
+## Decision layer and Genie
+
+The bootstrap command creates a governed decision layer without changing the
+existing `reporting` tables:
+
+| Schema | Purpose |
+| --- | --- |
+| `reporting` | Backward-compatible operational output tables. |
+| `bronze` | Immutable raw API event envelopes, including the original JSON payload. |
+| `silver` | Standardised event contract with cleaned labels and valid prediction types. |
+| `gold` | Decision-ready aquifer recommendations and daily KPIs. |
+| `ops` | Live quality checks for all three decision layers. |
+
+Gold views are the only business-facing sources in the bundled Genie Agent.
+The agent is instructed to check `ops.decision_layer_quality` before making
+trust statements and never to use Bronze payloads for recommendations.
+Live AquaPredict events currently enter Bronze as immutable raw JSON envelopes;
+future CSV and external API feeds can use a Unity Catalog volume and feed the
+same Silver contract without changing Gold, Genie, or the application consumer.
+
+To provision or update the layer locally, enable Genie and run the bootstrap
+inside the backend container:
+
+```dotenv
+DATABRICKS_GENIE_ENABLED=true
+DATABRICKS_GENIE_TITLE=AquaPredict Decision Intelligence
+```
+
+```bash
+docker compose --env-file .env.demo -f docker-compose.demo.yml exec backend \
+  python bootstrap_databricks_decision_layer.py
+```
+
+The command is idempotent: schemas, tables, and views are recreated safely;
+an existing Genie Agent with the configured title is reused. The service
+principal's OAuth secret needs the `genie` API scope in addition to SQL access.
+
+After provisioning, use these starter Genie questions:
+
+- Which locations should be prioritized for field validation?
+- What is the average aquifer probability by decision date?
+- Are all Bronze, Silver, and Gold data quality checks passing?
+
 ## Configure the demo
 
 Copy the example configuration and add the following to `.env.demo`:

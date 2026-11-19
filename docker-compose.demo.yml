@@ -19,6 +19,10 @@ services:
       DATABRICKS_SCHEMA: ${DATABRICKS_SCHEMA:-reporting}
       DATABRICKS_CLIENT_ID: ${DATABRICKS_CLIENT_ID:-}
       DATABRICKS_CLIENT_SECRET: ${DATABRICKS_CLIENT_SECRET:-}
+      # Optional Genie Agent generated from Gold decision views.
+      DATABRICKS_GENIE_ENABLED: ${DATABRICKS_GENIE_ENABLED:-false}
+      DATABRICKS_GENIE_TITLE: ${DATABRICKS_GENIE_TITLE:-AquaPredict Decision Intelligence}
+      DATABRICKS_GENIE_PARENT_PATH: ${DATABRICKS_GENIE_PARENT_PATH:-}
       # Legacy alternative. Prefer OAuth M2M credentials above.
       DATABRICKS_TOKEN: ${DATABRICKS_TOKEN:-}
     volumes:
