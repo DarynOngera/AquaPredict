@@ -49,6 +49,14 @@ After provisioning, use these starter Genie questions:
 - What is the average aquifer probability by decision date?
 - Are all Bronze, Silver, and Gold data quality checks passing?
 
+Genie evaluates Unity Catalog access as the person asking the question. Grant
+each demo user only the Gold and Ops assets, never Bronze:
+
+```bash
+docker compose --env-file .env.demo -f docker-compose.demo.yml exec backend \
+  python grant_databricks_genie_reader.py user@example.com
+```
+
 ## Configure the demo
 
 Copy the example configuration and add the following to `.env.demo`:
